@@ -2,8 +2,8 @@
 
 # SLURM environment arguments
 IMAGE=/netscratch/enroot/dlcc_pytorch_20.07.sqsh
-NUM_CPUS=48
-MEM_PER_CPU=4GB
+NUM_CPUS=32
+MEM_PER_CPU=8GB
 
 # Change anaconda environment
 ENV=multirescnn
@@ -13,10 +13,10 @@ mimic3_dir=data/mimic3
 split=train_50
 model=en_core_sci_lg
 cache=/netscratch/samin/cache/scispacy
-batch_size=1024
+batch_size=4096
 
 
-srun -K -p RTXA6000-MLT \
+srun -K -p batch \
   --container-mounts=/netscratch:/netscratch,/ds:/ds,`pwd`:`pwd` \
   --container-workdir=`pwd` \
   --container-image=$IMAGE \
