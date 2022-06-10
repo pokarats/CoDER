@@ -127,8 +127,6 @@ dmypy.json
 /cache
 /runs
 /scripts/*.log
-/src/utils/HEMKit
-/srun
 /pretrain
 /models
 /notes
