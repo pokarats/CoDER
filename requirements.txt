@@ -115,7 +115,7 @@ SQLAlchemy==1.0.8
 sqlparse==0.3.0
 srsly==0.0.7
 tensorboardX==1.7
-thinc==7.0.4
+thinc>=7.0.8,<7.1.0
 torch==1.1.0
 tqdm==4.32.2
 Unidecode==1.1.0
