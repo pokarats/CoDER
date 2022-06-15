@@ -120,7 +120,7 @@ torch==1.1.0
 tqdm==4.32.2
 Unidecode==1.1.0
 urllib3==1.25.3
-wasabi==0.2.2
+wasabi>=0.8.1,<1.1.0
 watchdog==0.8.3
 wcwidth==0.1.7
 websocket-client==0.56.0
