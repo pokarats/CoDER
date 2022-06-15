@@ -1,5 +1,5 @@
 alabaster==0.7.12
-allennlp==0.8.4
+# allennlp==0.8.4
 argcomplete==1.9.4
 argh==0.26.2
 asn1crypto==0.24.0
@@ -128,5 +128,5 @@ Werkzeug==0.15.4
 word2number==1.1
 zipp==0.5.1
 pandas~=1.3.3
-spacy~=2.1.4
+spacy~=3.0.7
 scispacy~=0.4.0
