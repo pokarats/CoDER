@@ -337,16 +337,21 @@ def test():
         [0, 1, 0, 1, 1],
         [0, 0, 1, 0, 1]
     ], dtype=np.float32)
+    # where output from yhat_raw > 0.5
     yhat = np.array([
         [0, 1, 0, 0, 0],
         [0, 0, 1, 0, 1],
         [0, 0, 1, 0, 1]
     ], dtype=np.float32)
+    # output of sigmoid functions
     yhat_raw = np.array([
         [0.21, 0.85, 0.11, 0.03, 0.01],
         [0.33, 0.25, 0.98, 0.20, 0.75],
         [0.13, 0.23, 0.89, 0.27, 0.78],
     ], dtype=np.float32)
+    # will need to be created for the mimic3 dataset (results will differ between full vs top50)
+    # each row: parent, child
+    # read the HEMKIT readme.txt
     dummy_hier = np.array([
         [10, 20], 
         [20,  1],
@@ -370,4 +375,7 @@ def test():
 
 
 if __name__=="__main__":
+    """
+    if error during testing, make sure to delete "hier.txt" file in the HEMKit dir for first run
+    """
     test()
