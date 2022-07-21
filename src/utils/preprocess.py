@@ -230,8 +230,8 @@ def next_notes(notesfile):
 def concat_data(labelsfile, notes_file, outfilename):
     """
         INPUTS:
-            labelsfile: sorted by hadm id, contains one label per line
-            notes_file: sorted by hadm id, contains one note per line
+            labelsfile: sorted by hadm id, contains 1 label per line
+            notes_file: sorted by hadm id, contains 1 note per line
     """
     with open(labelsfile, 'r') as lf:
         logger.info("CONCATENATING")

@@ -75,7 +75,7 @@ def gensim_to_fasttext_embeddings(wv_file, vocab_file, Y, outfile=None):
 def build_matrix(ind2w, wv):
     """
         Go through vocab in order. Find vocab word in wv.index2word, then call wv.word_vec(wv.index2word[i]).
-        Put results into one big matrix.
+        Put results into 1 big matrix.
         Note: ind2w starts at 1 (saving 0 for the pad character), but gensim word vectors starts at 0
     """
     W = np.zeros((len(ind2w)+1, len(wv.word_vec(wv.index2word[0])) ))
