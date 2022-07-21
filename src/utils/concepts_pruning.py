@@ -120,12 +120,15 @@ class ConceptCorpusReader:
         self.umls_fname = Path(mimic3_dir) / f'{split}_{version}_umls.txt'
         self.docidx_to_concepts = dict()
         # [doc idx][sent id]: [((s1, e1), [concept1, concept2, ...]),(s2, e2,), [concept1, concept2, ...]]
-        self.confidence_threshold = threshold if threshold is not None else 0.0
+        self.confidence_threshold = threshold if threshold is not None else 0.7
+        # 0.7 is the default used in the concepts_linking.py
 
     def read_umls_file(self):
         """
         Extract entities from each sentence in each doc and store in a dict mapping doc_id, sent_id to list of
         UMLS entities
+
+
 
         :return:
 
@@ -144,6 +147,8 @@ class ConceptCorpusReader:
                     ((item['s'], item['e']), [ents[0] for ents in item['umls_ents']
                                               if float(ents[-1]) > self.confidence_threshold]) for item in line[uid]
                 ]
+                # each 'umls_ents' is a list of lists --> [[cui1, confidence score1],[cui2, confidence score2], ...]
+                # ents[0] gets the cui, ents[-1] gets the confidence score
 
     def concept_dfs(self):
         """
@@ -296,7 +301,10 @@ def main(cl_args):
 
     # prune out unseen, too rare/frequent cuis, and cuis whose types not in icd9 types (for a specific partition/split)
     unseen_cuis = get_unseen_cuis_to_discard(all_partitions_dfs)
-    unseen_rare_freq_cuis = unseen_cuis.union(add_rare_and_freq_cuis_to_discard(all_partitions_dfs, cl_args.split))
+    unseen_rare_freq_cuis = unseen_cuis.union(add_rare_and_freq_cuis_to_discard(all_partitions_dfs,
+                                                                                cl_args.split,
+                                                                                cl_args.min,
+                                                                                cl_args.max))
     cuis_to_discard = unseen_rare_freq_cuis.union(add_non_icd9_cuis_to_discard(all_partitions_dfs,
                                                                                cl_args.split,
                                                                                mimic_icd9_tuis,
@@ -342,6 +350,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--linker_name", action="store", type=str, default="scispacy_linker",
         help="SciSpacy UMLS Entity Linker name. e.g. scispacy_linker"
+    )
+    parser.add_argument(
+        "--min", action="store", type=int, default=4,
+        help="Min frequency threshold to include cuis"
+    )
+    parser.add_argument(
+        "--max", action="store", type=int, default=8000,
+        help="Max frequency threshold to include cuis"
     )
     parser.add_argument(
         "--cache_dir", action="store", type=str,
