@@ -111,7 +111,7 @@ class ConceptCorpusReader:
     Read linked_data corpus file for a specified split and obtain counts for each UMLS entity in each doc/sample
     """
 
-    def __init__(self, mimic3_dir, split, version, threshold):
+    def __init__(self, mimic3_dir, split, version, threshold=None):
 
         """
 
@@ -154,8 +154,8 @@ class ConceptCorpusReader:
                     ((item['s'], item['e']), [ents[0] for ents in item['umls_ents']
                                               if float(ents[-1]) > self.confidence_threshold]) for item in line[uid]
                 ]
-                self.docidx_to_concepts_simple[doc_id].update([ents[0] for ents in item['umls_ents']
-                                              if float(ents[-1]) > self.confidence_threshold for item in line[uid]])
+                self.docidx_to_concepts_simple[doc_id].update([ents[0] for item in line[uid] for ents in item['umls_ents']
+                                              if float(ents[-1]) > self.confidence_threshold])
                 # each 'umls_ents' is a list of lists --> [[cui1, confidence score1],[cui2, confidence score2], ...]
                 # ents[0] gets the cui, ents[-1] gets the confidence score
 
