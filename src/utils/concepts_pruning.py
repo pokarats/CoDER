@@ -21,6 +21,9 @@ import traceback
 import collections
 import json
 import pickle
+import pandas as pd
+import matplotlib.pyplot as plt
+
 
 from scispacy.umls_linking import UmlsEntityLinker
 from pathlib import Path
@@ -58,15 +61,16 @@ def lines_from_file(file_path, delimiter="|"):
             yield line.rstrip().split(delimiter)
 
 
-def pickle_obj(obj_to_pickle, args_cl):
+def pickle_obj(obj_to_pickle, args_cl, which_pickle):
     """
 
+    :param which_pickle: the cl_args arg for the desired pickle filename e.g. pickle_file
     :param obj_to_pickle:
     :param args_cl: parse args dict
     :return: None
     """
     data_folder = Path(args_cl.mimic3_dir)
-    pickle_file = data_folder / f"{args_cl.version}_{args_cl.pickle_file}.pickle"
+    pickle_file = data_folder / f"{args_cl.version}_{which_pickle}.pickle"
     with open(pickle_file, 'wb') as handle:
         pickle.dump(obj_to_pickle, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -74,7 +78,7 @@ def pickle_obj(obj_to_pickle, args_cl):
         pickled = pickle.load(handle)
 
     assert(obj_to_pickle == pickled), f"Pickled object not the same as original!!"
-    logger.info(f"All cuis_to_discard set pickled to: {pickle_file}")
+    logger.info(f"Object pickled saved at: {pickle_file}")
 
 
 def get_dataset_semantic_types(file_path):
@@ -86,7 +90,7 @@ def get_dataset_semantic_types(file_path):
     :rtype: List
     """
 
-    # each line is has this format: DEVI|Devices|T074|Medical Device, 3rd item is the semantic type
+    # each line has this format: DEVI|Devices|T074|Medical Device, 3rd item is the semantic type
     return [sem_type[2] for sem_type in lines_from_file(file_path)]
 
 
@@ -120,6 +124,8 @@ class ConceptCorpusReader:
         self.umls_fname = Path(mimic3_dir) / f'{split}_{version}_umls.txt'
         self.docidx_to_concepts = dict()
         # [doc idx][sent id]: [((s1, e1), [concept1, concept2, ...]),(s2, e2,), [concept1, concept2, ...]]
+        self.docidx_to_concepts_simple = dict()
+        # [doc idx]: {concept1, concept2, concept3, ....}
         self.confidence_threshold = threshold if threshold is not None else 0.7
         # 0.7 is the default used in the concepts_linking.py
 
@@ -143,10 +149,13 @@ class ConceptCorpusReader:
                 doc_id, sent_id = list(map(int, uid.split("_")))
                 if doc_id not in self.docidx_to_concepts:
                     self.docidx_to_concepts[doc_id] = dict()
+                    self.docidx_to_concepts_simple[doc_id] = set()
                 self.docidx_to_concepts[doc_id][sent_id] = [
                     ((item['s'], item['e']), [ents[0] for ents in item['umls_ents']
                                               if float(ents[-1]) > self.confidence_threshold]) for item in line[uid]
                 ]
+                self.docidx_to_concepts_simple[doc_id].update([ents[0] for ents in item['umls_ents']
+                                              if float(ents[-1]) > self.confidence_threshold for item in line[uid]])
                 # each 'umls_ents' is a list of lists --> [[cui1, confidence score1],[cui2, confidence score2], ...]
                 # ents[0] gets the cui, ents[-1] gets the confidence score
 
@@ -229,6 +238,94 @@ def get_unseen_cuis_to_discard(partition_dfs):
     return only_in_dev.union(only_in_test)
 
 
+def prune_dfs_dict(partition_dfs_counters, cuis_to_discard):
+    """
+
+    :param partition_dfs_counters: dict of Counters for each partition
+    :param cuis_to_discard: set of cuis to discard
+    :return: None, dict of partition df counters pop the keys in place
+    """
+    for key in partition_dfs_counters.keys():
+        for cui in cuis_to_discard:
+            partition_dfs_counters[key].pop(cui, None)
+
+
+def get_min_max_threshold(partition_dfs_counters, partition="train"):
+    """
+
+    :param partition_dfs_counters: Dict of Counters for all partitions
+    :param partition: name of partition, train, dev, or test
+    :return: min threshold, max threshold
+    :rtype: tuple
+    """
+    top_100 = partition_dfs_counters[partition].most_common(100)
+    lowest = partition_dfs_counters[partition].most_common()[::-1]
+
+    logger.info(f"Top 100 concepts freq in {partition}: \n{top_100}")
+    #logger.info(f"Least frequent 1000 concepts in {partition}: \n{lowest_100}")
+
+    # dict of normalized frequency
+    total_freq = sum(partition_dfs_counters[partition].values())
+    num_unique_cuis = len(partition_dfs_counters[partition])
+    logger.info(f"Total concept counts in {partition}: {total_freq}")
+    logger.info(f"Total unique concepts in {partition}: {num_unique_cuis}")
+
+    # find out absolute freq for max and min where max is > 1500x/1million and min is 0.1x/1million
+    top_100_normalized = [(cui, freq * 1000000.00 / total_freq) for (cui, freq) in top_100 if freq * 1000000.00 / total_freq >= 1500]
+    lowest_normalized = [(cui, freq * 1000000.00 / total_freq) for (cui, freq) in lowest if freq * 1000000.00 / total_freq >= 0.1]
+    logger.info(f"Normalized top 100 cuis freq: in {partition}: \n{top_100_normalized[:100]}")
+    logger.info(f"Normalzied lowest cuis freq: in {partition}: \n{lowest_normalized[:100]}")
+
+    # find the freq of the cui in the lowest_normalized
+    min_threshold = partition_dfs_counters[partition][lowest_normalized[0][0]]
+    logger.info(f"min frequency threshold: {min_threshold}")
+    num_unique_cuis_to_discarded = len([cui for cui, freq in partition_dfs_counters[partition].items() if freq < min_threshold])
+    percent_cuis_to_discard = num_unique_cuis_to_discarded * 100.00 / num_unique_cuis
+    logger.info(f"Discarding based on min frequency threshold amonts to: {percent_cuis_to_discard} % of cuis")
+
+    # find the freq of the cui in the top normalized
+    max_threshold = partition_dfs_counters[partition][top_100_normalized[-1][0]]
+    logger.info(f"max frequency threshold: {max_threshold}")
+    num_unique_cuis_above_max = len([cui for cui, freq in partition_dfs_counters[partition].items() if freq > max_threshold])
+    percent_cuis_above_max = num_unique_cuis_above_max * 100.00 / num_unique_cuis
+    logger.info(f"Discarding based on max frequency threshold amonts to: {percent_cuis_above_max} % of cuis")
+    logger.info(f"total discarded cuis amount to: {percent_cuis_to_discard + percent_cuis_above_max} % of cuis")
+
+    return min_threshold, max_threshold
+
+
+def get_freq_distr_plots(partition_dfs_counters, partition, save_fig=False):
+    """
+
+    :param partition_dfs_counters: Dict of Counters for all partitions
+    :param partition: name of partition, train, dev, or test
+    :type partition: Str
+    :param save_fig: whether the plot will be saved to file or not
+    :return: None
+    """
+
+    logger.info(f'Plotting {partition} cui frequency distribution')
+
+    cui_freq = pd.DataFrame(partition_dfs_counters[partition].most_common(), columns=['cuis', 'count'])
+    fig, ax = plt.subplots(figsize=(18, 12))
+
+    # Plot horizontal bar graph
+    cui_freq.sort_values(by='count').plot.barh(x='cuis', y='count', ax=ax, color="brown")
+    ax.set_title(f'Cuis Frequency Distribution in {partition}')
+    ax.set_xlabel(f'Count')
+    ax.set_ylabel(f'Cui')
+
+    if save_fig:
+        log_folder = Path(f"../../scratch/.log/{date.today():%y_%m_%d}")
+        fig_path = log_folder / f"{partition}_cuis_freq.png"
+        logger.info(f'Saving {partition} cui frequency distribution bar plot to {fig_path}')
+        fig.savefig(fig_path, bbox_inches='tight')
+
+    else:
+        fig.tight_layout()
+        plt.show()
+
+
 def add_rare_and_freq_cuis_to_discard(partition_dfs, split, min_threshold=5, max_threshold=4000):
     """
     Make a set of cuis that are either too rare or too frequent according to specified min/max thresholds
@@ -276,9 +373,10 @@ def add_non_icd9_cuis_to_discard(partition_dfs, split, dataset_icd9_sem_types, s
     for cui in tqdm(partition_dfs[split].keys()):
         if any(tui not in dataset_icd9_sem_types for tui in spacy_umls_linker.kb.cui_to_entity[cui].types):
             # kb.cui_to_entity[cui] maps to scispacy.linking_utils.Entity class, which is a NamedTuple
-            # see https://github.com/allenai/scispacy/scispacy/linking_utils.py from commit@583e35e
+            # see https://github.com/allenai/scispacy/blob/main/scispacy/linking_utils.py from commit@583e35e
             # spacy_umls_linker.kb.cui_to_entity[cui].types can also be index accessed:
             # spacy_umls_linker.kb.cui_to_entity[cui][3]
+            # spacy_umls_linker.kb.cui_to_entity[cui].types is a List of Str as 1 cui can have multiple tui's
             cuis_to_discard.add(cui)
 
     logger.info(f"No. of unique concepts in {split} to discard: {len(cuis_to_discard)}")
@@ -295,25 +393,46 @@ def main(cl_args):
 
     # get cui freq for all splits
     all_partitions_dfs = get_dataset_dfs(cl_args.mimic3_dir, ["train", "dev", "test"], "50")
+    pickle_obj(all_partitions_dfs, cl_args, cl_args.dict_pickle_file)
+
+    # prune out unseen, too rare/frequent cuis, and cuis whose types not in icd9 types (for a specific partition/split)
+    logger.info('Determining cuis to discard...')
+    unseen_cuis = get_unseen_cuis_to_discard(all_partitions_dfs)
+    pickle_obj(unseen_cuis, cl_args, cl_args.misc_pickle_file)
+
+    prune_dfs_dict(all_partitions_dfs, unseen_cuis)
+    logger.info(f'Number of unique concepts in train without unseen cuis: {len(all_partitions_dfs["train"])}')
+    logger.info(f'Number of unique concepts in dev without unseen cuis: {len(all_partitions_dfs["dev"])}')
+    logger.info(f'Number of unique concepts in test without unseen cuis: {len(all_partitions_dfs["test"])}')
+
+    pickle_obj(all_partitions_dfs, cl_args, "dict_pickle_file_no_unseen")
+    min_threshold, max_threshold = get_min_max_threshold(all_partitions_dfs)
+
+    unseen_rare_freq_cuis = unseen_cuis.union(add_rare_and_freq_cuis_to_discard(all_partitions_dfs,
+                                                                                cl_args.split,
+                                                                                min_threshold,
+                                                                                max_threshold))
 
     logger.info('Loading SciSpacy UmlsEntityLinker ...')
     linker = UmlsEntityLinker(name=cl_args.linker_name)
-
-    # prune out unseen, too rare/frequent cuis, and cuis whose types not in icd9 types (for a specific partition/split)
-    unseen_cuis = get_unseen_cuis_to_discard(all_partitions_dfs)
-    unseen_rare_freq_cuis = unseen_cuis.union(add_rare_and_freq_cuis_to_discard(all_partitions_dfs,
-                                                                                cl_args.split,
-                                                                                cl_args.min,
-                                                                                cl_args.max))
     cuis_to_discard = unseen_rare_freq_cuis.union(add_non_icd9_cuis_to_discard(all_partitions_dfs,
                                                                                cl_args.split,
                                                                                mimic_icd9_tuis,
                                                                                linker))
 
     logger.info(f"No. of all unique concepts to discard: {len(cuis_to_discard)}")
+    prune_dfs_dict(all_partitions_dfs, cuis_to_discard)
+    logger.info(f'Number of unique concepts in train after pruning: {len(all_partitions_dfs["train"])}')
+    logger.info(f'Number of unique concepts in dev after pruning: {len(all_partitions_dfs["dev"])}')
+    logger.info(f'Number of unique concepts in test after pruning: {len(all_partitions_dfs["test"])}')
 
     # pickle cuis to discard for version
-    pickle_obj(cuis_to_discard, cl_args)
+    pickle_obj(cuis_to_discard, cl_args, cl_args.pickle_file)
+    pickle_obj(all_partitions_dfs, cl_args, cl_args.dict_pickle_file)
+
+    # plot freq distribution for the pruned train parition
+    get_freq_distr_plots(all_partitions_dfs, "train", save_fig=True)
+
 
     lapsed_time = (time.time() - start_time) // 60
     logger.info(f"Took {lapsed_time} minutes!")
@@ -371,7 +490,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--pickle_file", action="store", type=str, default="cuis_to_discard",
-        help="Path to file containing semantic types in the MIMIC-III dataset"
+        help="Path to pickle file for set of cuis to discard"
+    )
+    parser.add_argument(
+        "--dict_pickle_file", action="store", type=str, default="pruned_partitions_dfs_dict",
+        help="Path to pickle file for partitions dfs dict of counters"
+    )
+    parser.add_argument(
+        "--misc_pickle_file", action="store", type=str, default="unseen_cuis",
+        help="Path to miscellaneous pickle file e.g. for set of unseen cuis to discard"
     )
     parser.add_argument(
         "--n_process", action="store", type=int, default=48,
