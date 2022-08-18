@@ -24,11 +24,12 @@ import pickle
 import pandas as pd
 import matplotlib.pyplot as plt
 
-
 from scispacy.umls_linking import UmlsEntityLinker
 from pathlib import Path
 from tqdm import tqdm
 
+
+logger = logging.getLogger(__name__)
 
 ICD9_SEMANTIC_TYPES = [
     'T017', 'T019', 'T020', 'T021', 'T022',
@@ -316,7 +317,8 @@ def get_freq_distr_plots(partition_dfs_counters, partition, save_fig=False):
     ax.set_ylabel(f'Cui')
 
     if save_fig:
-        log_folder = Path(f"../../scratch/.log/{date.today():%y_%m_%d}")
+        proj_folder = Path(__file__).resolve().parent.parent.parent
+        log_folder = proj_folder / f"scratch/.log/{date.today():%y_%m_%d}"
         fig_path = log_folder / f"{partition}_cuis_freq.png"
         logger.info(f'Saving {partition} cui frequency distribution bar plot to {fig_path}')
         fig.savefig(fig_path, bbox_inches='tight')
@@ -442,7 +444,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--mimic3_dir", action="store", type=str, default="../../data/linked_data/top50",
+        "--mimic3_dir", action="store", type=str, default="data/linked_data/top50",
         help="Path to MIMIC-III data directory containing processed versions with linked_data"
              "of the top-50 and full train/dev/test splits."
     )
@@ -485,7 +487,7 @@ if __name__ == "__main__":
              "variable ``SCISPACY_CACHE``."
     )
     parser.add_argument(
-        "--semantic_type_file", action="store", type=str, default="../../data/mimic3/semantic_types_mimic.txt",
+        "--semantic_type_file", action="store", type=str, default="data/mimic3/semantic_types_mimic.txt",
         help="Path to file containing semantic types in the MIMIC-III dataset"
     )
     parser.add_argument(
@@ -517,7 +519,8 @@ if __name__ == "__main__":
 
     # Setup logging and start timer
     basename = Path(__file__).stem
-    log_folder = Path(f"../../scratch/.log/{date.today():%y_%m_%d}")
+    proj_folder = Path(__file__).resolve().parent.parent.parent
+    log_folder = proj_folder / f"scratch/.log/{date.today():%y_%m_%d}"
     log_file = log_folder / f"{time.strftime('%Hh%Mm%Ss')}_{basename}.log"
 
     if not log_folder.exists():
@@ -525,6 +528,7 @@ if __name__ == "__main__":
 
     logging.basicConfig(format="%(asctime)s - %(filename)s:%(funcName)s %(levelname)s: %(message)s",
                         filename=log_file,
+                        disable_existing_loggers=False,
                         level=logging.INFO)
 
     # Manage the LOG and where to pipe it (log file only or log file + STDOUT)

@@ -35,12 +35,14 @@ label cluster (optional add to baseline) by
 2)
 """
 
+logger = logging.getLogger(__name__)
+
 class RuleBasedClassifier:
     """
     Classify an input sample according to possible cuis that correspond to ICD9 labels
     """
 
-    def __init__(self, data_dir, version, extension=None):
+    def __init__(self, cl_arg, version, extension=None):
 
         """
 
@@ -50,25 +52,28 @@ class RuleBasedClassifier:
         :param threshold: confidence level threshold to include concept
         """
 
-        self.icd9_umls_fname = Path(data_dir) / 'ICD9_umls2020aa'
-        self.cui_discard_set_pfile = Path(data_dir) / 'linked_data' / 'top50' / f'{version}_cuis_to_discard.pickle'
+        self.icd9_umls_fname = Path(cl_arg.data_dir) / 'ICD9_umls2020aa'
+        self.cui_discard_set_pfile = Path(cl_arg.data_dir) / 'linked_data' / 'top50' / f'{version}_cuis_to_discard.pickle'
         self.cui_to_discard = None
         self.cui_to_icd9 = dict()
         self.icd9_to_cui = dict()
         self.tui_icd9_to_desc = dict()  # dict[tui][icd9] = desc
         self.extension = extension
-        self.nlp = spacy.load("en_core_sci_lg") if self.extension is not None else None
-        self.linker = UmlsEntityLinker(name="scispacy_linker") if self.extension is not None else None
+        self.nlp = spacy.load(cl_arg.scispacy_model_name) if self.extension else None
+        self.linker = UmlsEntityLinker(name=cl_arg.linker_name) if self.extension else None
+        self.min_num_labels = cl_arg.min_num_labels
 
         self._load_cuis_to_discard()
         self._load_icd9_mappings()
 
 
     def _load_cuis_to_discard(self):
+        logger.info(f"Loading cuis to discard from pickle fie: {self.cui_discard_set_pfile}...")
         with open(self.cui_discard_set_pfile, 'rb') as handle:
             self.cui_to_discard = pickle.load(handle)
 
     def _load_icd9_mappings(self):
+        logger.info(f"Creating cui icd9 mapping from file: {self.icd9_umls_fname}...")
         with open(self.icd9_umls_fname) as rfname:
             for line in tqdm(rfname):
                 line = line.strip()
@@ -101,6 +106,7 @@ class RuleBasedClassifier:
             return 0.0
 
     def _get_all_icd9_from_cui(self, cui):
+        logger.info(f"Getting all icd9 codes related to {cui}")
         tuis = self.linker.kb.cui_to_entity[cui].types
         icd9_codes = set()
         if len(tuis) < 1:
@@ -114,6 +120,7 @@ class RuleBasedClassifier:
         return icd9_codes
 
     def _get_most_similar_icd9_from_cui(self, cui, similarity_threshold):
+        logger.debug(f"Getting most similar icd9 from {cui}")
         _, _, definitions, tuis, *_ = self.linker.kb.cui_to_entity[cui]
         icd9_codes = []
         max_sim_score = similarity_threshold
@@ -158,7 +165,7 @@ class RuleBasedClassifier:
         icd9_labels = set()
         icd9_labels.update({self.cui_to_icd9.get(cui) for cui in pruned_input_cuis
                             if self.cui_to_icd9.get(cui) is not None})
-        if self.extension:
+        if self.extension and len(icd9_labels) < self.min_num_labels:
             additional_icd9 = set()
             if self.extension == "all":
                 # add all icd9 codes corresponding to the TUI of the cui that doesn't correspond to an icd9 code
@@ -168,7 +175,7 @@ class RuleBasedClassifier:
 
             elif self.extension == "best":
                 # add icd9 code whose description is most similar to the cui without a corresponding icd9 code
-                for cui in pruned_input_cuis:
+                for cui in tqdm(pruned_input_cuis, total=len(pruned_input_cuis), desc=f"pruned input cuis"):
                     if self.cui_to_icd9.get(cui) is None:
                         additional_icd9.update(self._get_most_similar_icd9_from_cui(cui, similarity_threshold))
             else:
@@ -184,7 +191,7 @@ def main(cl_args):
     start_time = time.time()
 
     logger.info(f"Initialize RuleBasedClassifier and ConceptCorpusReader...")
-    rule_based_model = RuleBasedClassifier(cl_args.data_dir, cl_args.version, cl_args.extension)
+    rule_based_model = RuleBasedClassifier(cl_args, cl_args.version, cl_args.extension)
     corpus_reader = ConceptCorpusReader(cl_args.mimic3_dir, cl_args.split, "1")
     corpus_reader.read_umls_file()
 
@@ -201,11 +208,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--data_dir", action="store", type=str, default="../../data",
+        "--data_dir", action="store", type=str, default="data",
         help="Path to data directory containing both the ICD9_umls2020aa file and the pickle file from concept_pruning"
     )
     parser.add_argument(
-        "--mimic3_dir", action="store", type=str, default="../../data/linked_data/1",
+        "--mimic3_dir", action="store", type=str, default="data/linked_data/1",
         help="Path to MIMIC-III data directory containing processed versions with linked_data"
              "of the top-50 and full train/dev/test splits."
     )
@@ -218,7 +225,7 @@ if __name__ == "__main__":
         help="Partition name: train, dev, test"
     )
     parser.add_argument(
-        "--extension", action="store", type=str, default="best",
+        "--extension", action="store", default=None,
         help="Extension type for when cui not matching any icd9, options: best or all"
     )
     parser.add_argument(
@@ -230,7 +237,11 @@ if __name__ == "__main__":
         help="SciSpacy UMLS Entity Linker name. e.g. scispacy_linker"
     )
     parser.add_argument(
-        "--min", action="store", type=int, default=0.4,
+        "--min", action="store", type=int, default=0.7,
+        help="Min threshold for similarity"
+    )
+    parser.add_argument(
+        "--min_num_labels", action="store", type=int, default=5,
         help="Min threshold for similarity"
     )
     parser.add_argument(
@@ -264,7 +275,8 @@ if __name__ == "__main__":
 
     # Setup logging and start timer
     basename = Path(__file__).stem
-    log_folder = Path(f"../../scratch/.log/{date.today():%y_%m_%d}")
+    proj_folder = Path(__file__).resolve().parent.parent.parent
+    log_folder = proj_folder / f"scratch/.log/{date.today():%y_%m_%d}"
     log_file = log_folder / f"{time.strftime('%Hh%Mm%Ss')}_{basename}.log"
 
     if not log_folder.exists():
