@@ -8,18 +8,40 @@
 # and
 #
 # https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
+#
+# and
+# https://gist.github.com/dwiuzila/b2d5a7cfb7e1b19fc0c3713636939e8e#file-score-py
 # ----------------------------------------------------------------------------------------------------------------
 
 import numpy as np
 import os
 import logging
+import pandas as pd
 
 from pathlib import Path
-from sklearn.metrics import roc_curve, auc
-
+from sklearn.metrics import roc_curve, auc, precision_recall_fscore_support
 
 
 logger = logging.getLogger(__file__)
+
+
+def simple_score(yhat, y, index):
+    """
+    Calculate simple precision, recall, and f1 score from sklearn
+
+    :param yhat: predicted labels
+    :type yhat: iterable of binarized labels
+    :param y: true labels
+    :type y: iterable of binarized labels
+    :param index: this will be pd DataFrame index column
+    :type index: str
+    :return:
+
+    """
+
+    metrics = precision_recall_fscore_support(y, yhat, average='weighted')
+    performance = {'precision': metrics[0], 'recall': metrics[1], 'f1': metrics[2]}
+    return pd.DataFrame(performance, index=[index])
 
 
 def union_size(yhat, y, axis):

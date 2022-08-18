@@ -34,6 +34,18 @@ def write_to_json(data, path):
     logger.info(f"Object saved at: {path}")
 
 
+def read_from_json(path):
+    """
+    :param path:
+    :return:
+    """
+    with open(path, mode="r", encoding="utf-8") as in_file:
+        data = json.load(in_file)
+    logger.info(f"Data obtained from json file saved at: {path}")
+
+    return data
+
+
 def lines_from_file(file_path, delimiter="|"):
     """
     Yield line from file path with trailing whitespaces removed
@@ -123,3 +135,14 @@ def prune_dfs_dict(partition_dfs_counters, cuis_to_discard):
     for key in partition_dfs_counters.keys():
         for cui in cuis_to_discard:
             partition_dfs_counters[key].pop(cui, None)
+
+
+def token_to_token(token):
+    """
+    Function for TFIDFVectorizer to process data file
+    :param token: a word/cui token
+    :type token: str
+    :return:
+    :rtype:
+    """
+    return token

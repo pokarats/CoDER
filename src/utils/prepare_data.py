@@ -15,64 +15,33 @@ DESCRIPTION: Python template with an argument parser and logger. Put all the "ma
 
 import sys
 import time
-import random
 from datetime import date
 import logging
 import argparse
 import traceback
 import pandas as pd
-import json
 
 from sklearn.preprocessing import MultiLabelBinarizer
-from src.utils.concepts_pruning import ConceptCorpusReader, pickle_obj
-from src.models.baseline_models import RuleBasedClassifier
+from src.utils.utils import read_from_json
 from pathlib import Path
 from tqdm import tqdm
 
 
 logger = logging.getLogger(__name__)
 
-# TODO: get tags for train, dev, test and binarize them
-#   binarize a given set of tags (e.g. output from rulebased model)
-#   all formats in pandas Datafram
 #   save as json afterward
 
 
-def read_from_json(path):
-    """
-    :param path:
-    :return:
-    """
-    with open(path, mode="r", encoding="utf-8") as in_file:
-        data = json.load(in_file)
-
-    return data
-
-
-class PrepareDataset:
-    def __init__(self, cl_arg, version):
-        """
-
-        :param mimic3_dir: directory where mimic3 data files are
-        :param split: dev, test, or train partition
-        :param version: full vs 50
-        :param threshold: confidence level threshold to include concept
-        """
-
+class PrepareData:
+    def __init__(self, cl_arg):
         self.icd9_umls_fname = Path(cl_arg.data_dir) / 'ICD9_umls2020aa'
-        self.preprocessed_data_dir = Path(cl_arg.data_dir) / 'linked_data' / f'top{version}' / 'preprocessed'
-        self.partition_json_file = self.preprocessed_data_dir / f'{cl_arg.partition}.json'
-        self.cui_to_discard = None
-        self.mlbinarizer = MultiLabelBinarizer()
+        self.linked_data_dir = Path(cl_arg.data_dir) / 'linked_data' / cl_arg.version
+        self.preprocessed_data_dir = self.linked_data_dir / 'preprocessed'
         self.all_icd9 = set()
-        self.partition_raw_labels = None
-        self.partition_binarized_labels = None
-
-    def _get_raw_labels(self):
-        logger.info(f"Get partition icd9 codes from file: {self.icd9_umls_fname}...")
-        json_data = read_from_json(self.partition_json_file)
-        partition_df = pd.DataFrame(json_data).drop(labels=['id', 'doc'], axis=1)
-        self.partition_raw_labels = partition_df['labels_id']
+        self.dataset_raw_labels = dict()
+        self.dataset_binarized_labels = dict()
+        self.mlbinarizer = None
+        self._get_all_icd9()
 
     def _get_all_icd9(self):
         logger.info(f"Get all icd9 codes from file: {self.icd9_umls_fname}...")
@@ -89,32 +58,64 @@ class PrepareDataset:
                     continue
                 self.all_icd9.add(icd9)
 
+    def init_mlbinarizer(self, labels=None):
+        self.mlbinarizer = MultiLabelBinarizer(classes=tuple(self.all_icd9) if not labels else labels)
+
+    def get_partition_labels(self, partition):
+        data_path = self.preprocessed_data_dir / f"{partition}.json"
+        logger.info(f"Get partition icd9 codes from file: {data_path}...")
+        json_data = read_from_json(data_path)
+        partition_labels_df = pd.DataFrame(json_data).drop(labels=['id', 'doc'], axis=1)
+        self.dataset_raw_labels[partition] = partition_labels_df['labels_id']
+
+        return self.dataset_raw_labels[partition]
+
+    def add_predicted_labels(self, filename, name='rule_based'):
+        if isinstance(filename, Path) or isinstance(filename, str):
+            data_path = self.linked_data_dir / f"{filename}"
+            logger.info(f"Get predicted icd9 codes from file: {data_path}...")
+            json_data = read_from_json(data_path)
+        else:
+            json_data = filename
+
+        partition_labels_df = pd.DataFrame(json_data).drop(labels=['id'], axis=1)
+        self.dataset_raw_labels[name] = partition_labels_df['labels_id']
+
+        return self.dataset_raw_labels[name]
+
+    def get_binarized_labels(self, partition):
+        if not self.mlbinarizer:
+            raise AttributeError(f"MLBinarizer has NOT been initialized!!!")
+        if not self.dataset_raw_labels:
+            raise AttributeError(f"No raw labels loaded!!")
+        if partition in self.dataset_raw_labels.keys():
+            self.dataset_binarized_labels[partition] = \
+                self.mlbinarizer.fit_transform(self.dataset_raw_labels[partition])
+        else:
+            raise KeyError(f"No raw labels from {partition} to binarize!")
+
+        return self.dataset_binarized_labels[partition]
 
 
 def main(cl_args):
     """Main loop"""
     start_time = time.time()
 
-    logger.info(f"Initialize RuleBasedClassifier and ConceptCorpusReader...")
-    rule_based_model = RuleBasedClassifier(cl_args, cl_args.version, cl_args.extension)
-    corpus_reader = ConceptCorpusReader(cl_args.mimic3_dir, cl_args.split, cl_args.version)
-    corpus_reader.read_umls_file()
+    logger.info(f"Preparing data for baselin and/or eval...")
+    prep = PrepareData(cl_args)
+    prep.init_mlbinarizer()
+    partitions = ['test', 'dev', 'train']
 
-    results = dict()
-    num_samples = len(corpus_reader.docidx_to_ordered_concepts)
-    logger.info(f"fitting rule-based mode on {cl_args.version} {cl_args.split} partition...")
-    for sample_idx in tqdm(corpus_reader.docidx_to_ordered_concepts.keys(),
-                           total=num_samples,
-                           desc=f"test_{cl_args.version}_cuis"):
-        a_sample = corpus_reader.docidx_to_ordered_concepts[sample_idx]
-        predicted_icd9 = rule_based_model.fit(a_sample, similarity_threshold=cl_args.min)
-        results[sample_idx] = predicted_icd9
+    binarized_labels = dict()
 
-    sample_results_idx = random.sample(range(0, num_samples), 5)
-    for idx in sample_results_idx:
-        logger.info(f"sample idx {idx} results: \n {results[idx]}")
+    for split in partitions:
+        _ = prep.get_partition_labels(split)
+        binarized_labels[split] = prep.get_binarized_labels(split)
 
-    pickle_obj(results, cl_args, cl_args.dict_pickle_file)
+    _ = prep.add_predicted_labels(cl_args.filename, 'rule_based')
+    binarized_labels['rule_based'] = prep.get_binarized_labels('rule_based')
+
+    assert len(binarized_labels['test']) == len(binarized_labels['rule_based'])
 
     lapsed_time = (time.time() - start_time)
     time_minute = int(lapsed_time // 60)
@@ -130,11 +131,6 @@ if __name__ == '__main__':
         help="Path to data directory containing both the ICD9_umls2020aa file and the pickle file from concept_pruning"
     )
     parser.add_argument(
-        "--mimic3_dir", action="store", type=str, default="data/linked_data/top50",
-        help="Path to MIMIC-III data directory containing processed versions with linked_data"
-             "of the top-50 and full train/dev/test splits."
-    )
-    parser.add_argument(
         "--version", action="store", type=str, default="50",
         help="Name of mimic-III dataset version to use: full vs 50 (for top50) or 1 for a 1 sample version"
     )
@@ -143,22 +139,9 @@ if __name__ == '__main__':
         help="Partition name: train, dev, test"
     )
     parser.add_argument(
-        "--min", action="store", type=int, default=0.7,
-        help="Min threshold for similarity"
+        "--filename", action="store", type=str, default="50_baseline_model_output.json",
+        help="Partition name: train, dev, test"
     )
-    parser.add_argument(
-        "--min_num_labels", action="store", type=int, default=7,
-        help="Min threshold for num of predicted labels before extending"
-    )
-    parser.add_argument(
-        "--dict_pickle_file", action="store", type=str, default="extension_baseline_model_output_dict",
-        help="Path to pickle file for dict mapping sample idx to output"
-    )
-    parser.add_argument(
-        "--misc_pickle_file", action="store", type=str, default="misc_pickle",
-        help="Path to miscellaneous pickle file e.g. for set of unseen cuis to discard"
-    )
-
     parser.add_argument(
         "--quiet", action="store_true", default=False,
         help="Do not print to stdout (log only)."

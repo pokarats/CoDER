@@ -24,6 +24,8 @@ import pandas as pd
 import json
 
 from utils.concepts_pruning import ConceptCorpusReader
+from utils.prepare_data import PrepareData
+from utils.eval import all_metrics, log_metrics, simple_score
 from utils.utils import write_to_json
 from models.baseline_models import RuleBasedClassifier
 from pathlib import Path
@@ -31,7 +33,7 @@ from tqdm import tqdm
 
 
 # TODO: write wrapper class for model selection between baseline models
-# TODO: post process outputs to (no. samples, no. classes) np array format for eval
+
 def main(cl_args):
     """Main loop"""
     start_time = time.time()
@@ -50,7 +52,7 @@ def main(cl_args):
         a_sample = corpus_reader.docidx_to_ordered_concepts[sample_idx]
         predicted_icd9 = rule_based_model.fit(a_sample, similarity_threshold=cl_args.min)
         predicted = {'id': sample_idx,
-                     'label_id': list(predicted_icd9)}
+                     'labels_id': list(predicted_icd9)}
         results.append(predicted)
 
     sample_results_idx = random.sample(range(0, num_samples), 5)
@@ -60,6 +62,34 @@ def main(cl_args):
     data_folder = Path(cl_args.mimic3_dir)
     result_file = data_folder / f"{cl_args.version}_{cl_args.dict_pickle_file}.json"
     write_to_json(results, result_file)
+
+    logger.info(f"Preparing data for baselin and/or eval...")
+    prep = PrepareData(cl_args)
+    prep.init_mlbinarizer()
+
+    binarized_labels = dict()
+
+    _ = prep.get_partition_labels(cl_args.split)
+    binarized_labels[cl_args.split] = prep.get_binarized_labels(cl_args.split)
+
+    _ = prep.add_predicted_labels(results, 'rule_based')
+    binarized_labels['rule_based'] = prep.get_binarized_labels('rule_based')
+
+    assert len(binarized_labels['test']) == len(binarized_labels['rule_based'])
+
+    metrics = all_metrics(binarized_labels['rule_based'],
+                          binarized_labels[cl_args.split],
+                          k=[1, 3, 5],
+                          yhat_raw=None,
+                          calc_auc=False)
+    log_metrics(metrics)
+
+    scores = pd.DataFrame()
+    rule_based_eval = simple_score(binarized_labels['rule_based'],
+                                   binarized_labels[cl_args.split],
+                                   'rule_based')
+    scores = pd.concat([scores, rule_based_eval])
+    logger.info(f"rule based results eval by sklearn: \n{scores.head()}")
 
     lapsed_time = (time.time() - start_time)
     time_minute = int(lapsed_time // 60)
