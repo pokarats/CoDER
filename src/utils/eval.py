@@ -18,7 +18,7 @@ from pathlib import Path
 from sklearn.metrics import roc_curve, auc
 
 
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+
 logger = logging.getLogger(__file__)
 
 
@@ -378,4 +378,6 @@ if __name__=="__main__":
     """
     if error during testing, make sure to delete "hier.txt" file in the HEMKit dir for first run
     """
+    logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+    logger = logging.getLogger(__file__)
     test()

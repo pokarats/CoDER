@@ -37,6 +37,7 @@ label cluster (optional add to baseline) by
 
 logger = logging.getLogger(__name__)
 
+
 class RuleBasedClassifier:
     """
     Classify an input sample according to possible cuis that correspond to ICD9 labels
@@ -53,7 +54,7 @@ class RuleBasedClassifier:
         """
 
         self.icd9_umls_fname = Path(cl_arg.data_dir) / 'ICD9_umls2020aa'
-        self.cui_discard_set_pfile = Path(cl_arg.data_dir) / 'linked_data' / 'top50' / f'{version}_cuis_to_discard.pickle'
+        self.cui_discard_set_pfile = Path(cl_arg.data_dir) / 'linked_data' / version / f'{version}_cuis_to_discard.pickle'
         self.cui_to_discard = None
         self.cui_to_icd9 = dict()
         self.icd9_to_cui = dict()
@@ -186,6 +187,11 @@ class RuleBasedClassifier:
 
         return icd9_labels
 
+# TODO: sklearn svm classifier with tfidf vectorizer
+class TFIDFBasedClassifier:
+    pass
+
+
 def main(cl_args):
     """Main loop"""
     start_time = time.time()
@@ -195,7 +201,7 @@ def main(cl_args):
     corpus_reader = ConceptCorpusReader(cl_args.mimic3_dir, cl_args.split, "1")
     corpus_reader.read_umls_file()
 
-    test_sample_0 = corpus_reader.docidx_to_concepts_simple[0]
+    test_sample_0 = corpus_reader.docidx_to_ordered_concepts[0]
     predicted_icd9 = rule_based_model.fit(test_sample_0)
 
     logger.info(f"Predicted icd9 for test sample: {predicted_icd9}")

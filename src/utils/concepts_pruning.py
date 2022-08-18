@@ -20,10 +20,9 @@ import argparse
 import traceback
 import collections
 import json
-import pickle
-import pandas as pd
-import matplotlib.pyplot as plt
 
+
+from src.utils.utils import get_freq_distr_plots, pickle_obj, get_dataset_semantic_types, prune_dfs_dict
 from scispacy.umls_linking import UmlsEntityLinker
 from pathlib import Path
 from tqdm import tqdm
@@ -47,53 +46,6 @@ ICD9_SEMANTIC_TYPES = [
     'T190', 'T191', 'T192', 'T195', 'T196',
     'T197', 'T200', 'T201', 'T203'
 ]
-
-
-def lines_from_file(file_path, delimiter="|"):
-    """
-    Yield line from file path with trailing whitespaces removed
-
-    :param file_path: path to file
-    :param delimiter: token type on which to split each line
-    :return: each line with trailing whitespaces removed
-    """
-    with open(file_path) as f:
-        for line in f:
-            yield line.rstrip().split(delimiter)
-
-
-def pickle_obj(obj_to_pickle, args_cl, which_pickle):
-    """
-
-    :param which_pickle: the cl_args arg for the desired pickle filename e.g. pickle_file
-    :param obj_to_pickle:
-    :param args_cl: parse args dict
-    :return: None
-    """
-    data_folder = Path(args_cl.mimic3_dir)
-    pickle_file = data_folder / f"{args_cl.version}_{which_pickle}.pickle"
-    with open(pickle_file, 'wb') as handle:
-        pickle.dump(obj_to_pickle, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    with open(pickle_file, 'rb') as handle:
-        pickled = pickle.load(handle)
-
-    assert(obj_to_pickle == pickled), f"Pickled object not the same as original!!"
-    logger.info(f"Object pickled saved at: {pickle_file}")
-
-
-def get_dataset_semantic_types(file_path):
-    """
-    File should contain semantic types in the dataset (e.g. MIMIC-III)
-
-    :param file_path:
-    :return: List of semantic types from dataset to be included
-    :rtype: List
-    """
-
-    # each line has this format: DEVI|Devices|T074|Medical Device, 3rd item is the semantic type
-    return [sem_type[2] for sem_type in lines_from_file(file_path)]
-
 
 def get_dataset_icd9_sem_types(file_path):
     """
@@ -125,8 +77,10 @@ class ConceptCorpusReader:
         self.umls_fname = Path(mimic3_dir) / f'{split}_{version}_umls.txt'
         self.docidx_to_concepts = dict()
         # [doc idx][sent id]: [((s1, e1), [concept1, concept2, ...]),(s2, e2,), [concept1, concept2, ...]]
-        self.docidx_to_concepts_simple = dict()
+        #self.docidx_to_concepts_simple = dict()
         # [doc idx]: {concept1, concept2, concept3, ....}
+        self.docidx_to_ordered_concepts = dict()
+        # [doc idx]: [list of concepts in the order of how they appear in the sample, can repeat]
         self.confidence_threshold = threshold if threshold is not None else 0.7
         # 0.7 is the default used in the concepts_linking.py
 
@@ -150,12 +104,15 @@ class ConceptCorpusReader:
                 doc_id, sent_id = list(map(int, uid.split("_")))
                 if doc_id not in self.docidx_to_concepts:
                     self.docidx_to_concepts[doc_id] = dict()
-                    self.docidx_to_concepts_simple[doc_id] = set()
+                    # self.docidx_to_concepts_simple[doc_id] = set()
+                    self.docidx_to_ordered_concepts[doc_id] = []
                 self.docidx_to_concepts[doc_id][sent_id] = [
                     ((item['s'], item['e']), [ents[0] for ents in item['umls_ents']
                                               if float(ents[-1]) > self.confidence_threshold]) for item in line[uid]
                 ]
-                self.docidx_to_concepts_simple[doc_id].update([ents[0] for item in line[uid] for ents in item['umls_ents']
+                #self.docidx_to_concepts_simple[doc_id].update([ents[0] for item in line[uid] for ents in item['umls_ents']
+                                              #if float(ents[-1]) > self.confidence_threshold])
+                self.docidx_to_ordered_concepts[doc_id].extend([ents[0] for item in line[uid] for ents in item['umls_ents']
                                               if float(ents[-1]) > self.confidence_threshold])
                 # each 'umls_ents' is a list of lists --> [[cui1, confidence score1],[cui2, confidence score2], ...]
                 # ents[0] gets the cui, ents[-1] gets the confidence score
@@ -239,18 +196,6 @@ def get_unseen_cuis_to_discard(partition_dfs):
     return only_in_dev.union(only_in_test)
 
 
-def prune_dfs_dict(partition_dfs_counters, cuis_to_discard):
-    """
-
-    :param partition_dfs_counters: dict of Counters for each partition
-    :param cuis_to_discard: set of cuis to discard
-    :return: None, dict of partition df counters pop the keys in place
-    """
-    for key in partition_dfs_counters.keys():
-        for cui in cuis_to_discard:
-            partition_dfs_counters[key].pop(cui, None)
-
-
 def get_min_max_threshold(partition_dfs_counters, partition="train"):
     """
 
@@ -293,39 +238,6 @@ def get_min_max_threshold(partition_dfs_counters, partition="train"):
     logger.info(f"total discarded cuis amount to: {percent_cuis_to_discard + percent_cuis_above_max} % of cuis")
 
     return min_threshold, max_threshold
-
-
-def get_freq_distr_plots(partition_dfs_counters, partition, save_fig=False):
-    """
-
-    :param partition_dfs_counters: Dict of Counters for all partitions
-    :param partition: name of partition, train, dev, or test
-    :type partition: Str
-    :param save_fig: whether the plot will be saved to file or not
-    :return: None
-    """
-
-    logger.info(f'Plotting {partition} cui frequency distribution')
-
-    cui_freq = pd.DataFrame(partition_dfs_counters[partition].most_common(), columns=['cuis', 'count'])
-    fig, ax = plt.subplots(figsize=(18, 12))
-
-    # Plot horizontal bar graph
-    cui_freq.sort_values(by='count').plot.barh(x='cuis', y='count', ax=ax, color="brown")
-    ax.set_title(f'Cuis Frequency Distribution in {partition}')
-    ax.set_xlabel(f'Count')
-    ax.set_ylabel(f'Cui')
-
-    if save_fig:
-        proj_folder = Path(__file__).resolve().parent.parent.parent
-        log_folder = proj_folder / f"scratch/.log/{date.today():%y_%m_%d}"
-        fig_path = log_folder / f"{partition}_cuis_freq.png"
-        logger.info(f'Saving {partition} cui frequency distribution bar plot to {fig_path}')
-        fig.savefig(fig_path, bbox_inches='tight')
-
-    else:
-        fig.tight_layout()
-        plt.show()
 
 
 def add_rare_and_freq_cuis_to_discard(partition_dfs, split, min_threshold=5, max_threshold=4000):
