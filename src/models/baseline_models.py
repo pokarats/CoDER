@@ -1,5 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+DESCRIPTION: Python template with an argument parser and logger. Put all the "main" logic into the method called "main".
+             Only use the true "__main__" section to add script arguments. The logger writes to a hidden folder './log/'
+             and uses the name of this file, followed by the date (by default). The argument parser comes with a default
+             option --quiet to keep the stdout clean.
+
+@copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
+            Intelligenz GmbH or its licensors, as applicable.
+
+@author: Noon Pokaratsiri Goldstein, sklearn pipeline adapted from code from Albers Uzila
+(https://towardsdatascience.com/multilabel-text-classification-done-right-using-scikit-learn-and-stacked-generalization-f5df2defc3b5)
+"""
+
 import sys
 import time
 from datetime import date
@@ -8,12 +21,26 @@ import argparse
 import traceback
 
 import pickle
+
+import pandas as pd
 import spacy
 from operator import itemgetter
 from src.utils.concepts_pruning import ConceptCorpusReader
+from src.utils.utils import token_to_token
+from src.utils.eval import simple_score, all_metrics
 from scispacy.umls_linking import UmlsEntityLinker
 from pathlib import Path
 from tqdm import tqdm
+
+from matplotlib import pyplot as plt
+from sklearn.base import BaseEstimator
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.svm import LinearSVC
+from sklearn.ensemble import StackingClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import ParameterGrid
 
 """
 rule-base model
@@ -36,6 +63,87 @@ label cluster (optional add to baseline) by
 """
 
 logger = logging.getLogger(__name__)
+
+
+class ClfSwitcher(BaseEstimator):
+    """
+     A Custom BaseEstimator that can switch between classifiers.
+    """
+    def __init__(self, estimator=MultiOutputClassifier(LinearSVC())):
+        """
+
+        :param estimator: the classifier
+        :type estimator: sklearn object
+        """
+
+        self.estimator = estimator
+
+    def fit(self, train, train_labels):
+        self.estimator.fit(train, train_labels)
+        return self
+
+    def predict(self, train):
+        return self.estimator.predict(train)
+
+    def predict_proba(self, train):
+        return self.estimator.predict_proba(train)
+
+    def score(self, train, train_labels):
+        return self.estimator.score(train, train_labels)
+
+
+class TFIDFBasedClassifier:
+    def __init__(self, cl_arg):
+        self.seed = cl_arg.seed
+        self.stacked_clf = MultiOutputClassifier(
+            StackingClassifier([('logreg2', LogisticRegression(class_weight='balanced',
+                                                               random_state=self.seed)),
+                                ('sgd2', SGDClassifier(class_weight='balanced',
+                                                       random_state=self.seed,
+                                                       loss='modified_huber')),
+                                ('svm2', LinearSVC(class_weight='balanced',
+                                                   random_state=self.seed))]), n_jobs=-1)
+        self.pipeline = Pipeline([('tfidf', TfidfVectorizer()),
+                                  ('clf', ClfSwitcher())])
+        self.stack_pipeline = Pipeline([('tfidf', TfidfVectorizer(analyzer='word',
+                                                                  tokenizer=token_to_token,
+                                                                  preprocessor=token_to_token,
+                                                                  ngram_range=(1, 2),
+                                                                  pattern=None)),
+                                        ('stack', self.stacked_clf)])
+        self.grid = ParameterGrid({'clf__estimator': (
+            MultiOutputClassifier(LogisticRegression(class_weight='balanced',
+                                                     random_state=self.seed), n_jobs=-1),
+            MultiOutputClassifier(SGDClassifier(class_weight='balanced',
+                                                random_state=self.seed,
+                                                loss='modified_huber'), n_jobs=-1),
+            MultiOutputClassifier(LinearSVC(class_weight='balanced', random_state=self.seed), n_jobs=-1)),
+            'tfidf__ngram_range': ((1, 1), (1, 2)),
+            'tfidf__analyzer': ('word',),
+            'tfidf__tokenizer': (token_to_token,),
+            'tfidf__preprocessor': (token_to_token,),
+            'tfidf__pattern': (None,)})
+        self.models = ['logreg1', 'logreg2', 'sgd1', 'sgd2', 'svm1', 'svm2']
+        self.eval_scores = pd.DataFrame()
+        self.eval_metrics = []
+
+    def execute_pipeline(self, x_train, y_train, x_val, y_val):
+        logger.info(f"Executing sklearn tfidf pipeline for LogisticRegression, SGDClassifier, and SGDClassifier...")
+        for model, params in tqdm(zip(self.models, self.grid), total=len(self.models), desc=f"training pipeline"):
+            self.pipeline.set_params(**params)
+            self.pipeline.fit(x_train, y_train)
+            y_pred = self.pipeline.predict(x_val)
+            self.eval_metrics.append(all_metrics(y_pred, y_val, k=[1, 3, 5], yhat_raw=None, calc_auc=False))
+            tfidf_score = simple_score(y_pred, y_val, model)
+            self.eval_scores = pd.concat([self.eval_scores, tfidf_score])
+
+    def execute_stack_pipeline(self, x_train, y_train, x_val, y_val):
+        logger.info(f"Executing sklearn tfidf pipeline for stacked classifier")
+        self.stack_pipeline.fit(x_train, y_train)
+        stack_pred = self.stack_pipeline.predict(x_val)
+        self.eval_metrics.append(all_metrics(stack_pred, y_val, k=[1, 3, 5], yhat_raw=None, calc_auc=False))
+        stack_model_score = simple_score(stack_pred, y_val, 'stack_model')
+        self.eval_scores = pd.concat([self.eval_scores, stack_model_score])
 
 
 class RuleBasedClassifier:
@@ -67,7 +175,6 @@ class RuleBasedClassifier:
         self._load_cuis_to_discard()
         self._load_icd9_mappings()
 
-
     def _load_cuis_to_discard(self):
         logger.info(f"Loading cuis to discard from pickle fie: {self.cui_discard_set_pfile}...")
         with open(self.cui_discard_set_pfile, 'rb') as handle:
@@ -93,7 +200,6 @@ class RuleBasedClassifier:
                 self.icd9_to_cui[icd9] = cui
                 self.cui_to_icd9[cui] = icd9
                 self.tui_icd9_to_desc[tui][icd9] = desc
-
 
     def _get_similarity_score(self, target_sent, candidate_sent):
         if self.extension:
@@ -186,10 +292,6 @@ class RuleBasedClassifier:
             icd9_labels.update(additional_icd9)
 
         return icd9_labels
-
-# TODO: sklearn svm classifier with tfidf vectorizer
-class TFIDFBasedClassifier:
-    pass
 
 
 def main(cl_args):

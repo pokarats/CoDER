@@ -20,16 +20,16 @@ import logging
 import argparse
 import traceback
 import pandas as pd
+import pickle
 
 from sklearn.preprocessing import MultiLabelBinarizer
 from src.utils.utils import read_from_json
+from src.utils.concepts_pruning import ConceptCorpusReader
 from pathlib import Path
 from tqdm import tqdm
 
 
 logger = logging.getLogger(__name__)
-
-#   save as json afterward
 
 
 class PrepareData:
@@ -37,16 +37,19 @@ class PrepareData:
         self.icd9_umls_fname = Path(cl_arg.data_dir) / 'ICD9_umls2020aa'
         self.linked_data_dir = Path(cl_arg.data_dir) / 'linked_data' / cl_arg.version
         self.preprocessed_data_dir = self.linked_data_dir / 'preprocessed'
+        self.cuis_to_discard = None
         self.all_icd9 = set()
+        self.dataset_cuis = dict()
         self.dataset_raw_labels = dict()
         self.dataset_binarized_labels = dict()
         self.mlbinarizer = None
+
         self._get_all_icd9()
 
     def _get_all_icd9(self):
         logger.info(f"Get all icd9 codes from file: {self.icd9_umls_fname}...")
-        with open(self.icd9_umls_fname) as rfname:
-            for line in tqdm(rfname):
+        with open(self.icd9_umls_fname) as fname:
+            for line in tqdm(fname):
                 line = line.strip()
                 if not line:
                     continue
@@ -58,8 +61,30 @@ class PrepareData:
                     continue
                 self.all_icd9.add(icd9)
 
+    def load_cuis_to_discard(self, filepath):
+        logger.info(f"Loading cuis to discard from pickle fie: {filepath}...")
+        with open(filepath, 'rb') as handle:
+            self.cuis_to_discard = pickle.load(handle)
+
     def init_mlbinarizer(self, labels=None):
         self.mlbinarizer = MultiLabelBinarizer(classes=tuple(self.all_icd9) if not labels else labels)
+
+    def get_partition_data(self, partition, version, pruning_file="50_cuis_to_discard.pickle"):
+        corpus_reader = ConceptCorpusReader(self.linked_data_dir, partition, version)
+        corpus_reader.read_umls_file()
+
+        pruning_file_path = self.linked_data_dir / pruning_file
+        self.load_cuis_to_discard(pruning_file_path)
+
+        logger.info(f"Prune cuis from {partition} samples...")
+        pruned_samples = []
+        for _, cuis in corpus_reader.docidx_to_ordered_concepts.items():
+            a_sample = {'cui': [cui for cui in cuis if cui not in self.cuis_to_discard]}
+            pruned_samples.append(a_sample)
+        pruned_samples_df = pd.DataFrame(pruned_samples)
+        self.dataset_cuis[partition] = pruned_samples_df['cui']
+
+        return self.dataset_cuis[partition]
 
     def get_partition_labels(self, partition):
         data_path = self.preprocessed_data_dir / f"{partition}.json"
@@ -107,15 +132,20 @@ def main(cl_args):
     partitions = ['test', 'dev', 'train']
 
     binarized_labels = dict()
+    dataset_cuis = dict()
 
     for split in partitions:
         _ = prep.get_partition_labels(split)
         binarized_labels[split] = prep.get_binarized_labels(split)
+        dataset_cuis[split] = prep.get_partition_data(split, cl_args.version, cl_args.misc_pickle_file)
 
     _ = prep.add_predicted_labels(cl_args.filename, 'rule_based')
     binarized_labels['rule_based'] = prep.get_binarized_labels('rule_based')
 
     assert len(binarized_labels['test']) == len(binarized_labels['rule_based'])
+    assert len(binarized_labels['train'] == len(dataset_cuis['train']))
+
+    logger.info(f"Sample from train data: \n{dataset_cuis['train'][:3]}")
 
     lapsed_time = (time.time() - start_time)
     time_minute = int(lapsed_time // 60)
@@ -141,6 +171,10 @@ if __name__ == '__main__':
     parser.add_argument(
         "--filename", action="store", type=str, default="50_baseline_model_output.json",
         help="Partition name: train, dev, test"
+    )
+    parser.add_argument(
+        "--misc_pickle_file", action="store", type=str, default="50_cuis_to_discard.pickle",
+        help="Path to miscellaneous pickle file e.g. for set of unseen cuis to discard"
     )
     parser.add_argument(
         "--quiet", action="store_true", default=False,
