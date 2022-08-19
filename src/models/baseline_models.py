@@ -26,15 +26,15 @@ import pandas as pd
 import spacy
 from operator import itemgetter
 from src.utils.concepts_pruning import ConceptCorpusReader
-from src.utils.utils import token_to_token
+from src.utils.utils import token_to_token, get_dataset_icd9_codes
 from src.utils.eval import simple_score, all_metrics
 from scispacy.umls_linking import UmlsEntityLinker
 from pathlib import Path
 from tqdm import tqdm
 
-from matplotlib import pyplot as plt
 from sklearn.base import BaseEstimator
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.svm import LinearSVC
@@ -65,8 +65,6 @@ label cluster (optional add to baseline) by
 logger = logging.getLogger(__name__)
 
 
-# TODO: add decision_function to be able to extract scores before getting the predicted labels
-#   - would this break MultiOuputClassifier?? Need to test this out
 class ClfSwitcher(BaseEstimator):
     """
      A Custom BaseEstimator that can switch between classifiers.
@@ -84,7 +82,12 @@ class ClfSwitcher(BaseEstimator):
         self.estimator.fit(train, train_labels)
         return self
 
+    def decision_function(self, train):
+        # outputs scores for each class (i.e. it's called by predict func to output labels)
+        return self.estimator.decision_function(train)
+
     def predict(self, train):
+        # outputs binarized labels
         return self.estimator.predict(train)
 
     def predict_proba(self, train):
@@ -97,7 +100,7 @@ class ClfSwitcher(BaseEstimator):
 class TFIDFBasedClassifier:
     def __init__(self, cl_arg):
         self.seed = cl_arg.seed
-        self.stacked_clf = MultiOutputClassifier(
+        self.stacked_clf = OneVsRestClassifier(
             StackingClassifier([('logreg2', LogisticRegression(class_weight='balanced',
                                                                random_state=self.seed)),
                                 ('sgd2', SGDClassifier(class_weight='balanced',
@@ -114,12 +117,12 @@ class TFIDFBasedClassifier:
                                                                   token_pattern=None)),
                                         ('stack', self.stacked_clf)])
         self.grid = ParameterGrid({'clf__estimator': (
-            MultiOutputClassifier(LogisticRegression(class_weight='balanced',
+            OneVsRestClassifier(LogisticRegression(class_weight='balanced',
                                                      random_state=self.seed), n_jobs=-1),
-            MultiOutputClassifier(SGDClassifier(class_weight='balanced',
+            OneVsRestClassifier(SGDClassifier(class_weight='balanced',
                                                 random_state=self.seed,
                                                 loss='modified_huber'), n_jobs=-1),
-            MultiOutputClassifier(LinearSVC(class_weight='balanced', random_state=self.seed), n_jobs=-1)),
+            OneVsRestClassifier(LinearSVC(class_weight='balanced', random_state=self.seed), n_jobs=-1)),
             'tfidf__ngram_range': ((1, 1), (1, 2)),
             'tfidf__analyzer': ('word',),
             'tfidf__tokenizer': (token_to_token,),
@@ -135,7 +138,8 @@ class TFIDFBasedClassifier:
             self.pipeline.set_params(**params)
             self.pipeline.fit(x_train, y_train)
             y_pred = self.pipeline.predict(x_val)
-            self.eval_metrics.append(all_metrics(y_pred, y_val, k=[1, 3, 5], yhat_raw=None, calc_auc=False))
+            y_pred_raw = self.pipeline.decision_function(x_val)
+            self.eval_metrics.append(all_metrics(y_pred, y_val, k=[1, 3, 5], yhat_raw=y_pred_raw, calc_auc=True))
             tfidf_score = simple_score(y_pred, y_val, model)
             self.eval_scores = pd.concat([self.eval_scores, tfidf_score])
 
@@ -143,21 +147,19 @@ class TFIDFBasedClassifier:
         logger.info(f"Executing sklearn tfidf pipeline for stacked classifier")
         self.stack_pipeline.fit(x_train, y_train)
         stack_pred = self.stack_pipeline.predict(x_val)
+        stack_pred_raw = self.stack_pipeline.decision_function(x_val)
         logger.info(f"Evaluating stack model results...")
-        self.eval_metrics.append(all_metrics(stack_pred, y_val, k=[1, 3, 5], yhat_raw=None, calc_auc=False))
+        self.eval_metrics.append(all_metrics(stack_pred, y_val, k=[1, 3, 5], yhat_raw=stack_pred_raw, calc_auc=True))
         stack_model_score = simple_score(stack_pred, y_val, 'stack_model')
         self.eval_scores = pd.concat([self.eval_scores, stack_model_score])
 
 
-# TODO:
-#   - cui-to-icd9 and icd9-to-cui need to have a dataset specific version; 50 and full
-#   - these version specific ones should contain only icd9s and possible cuis in that dataset/version
 class RuleBasedClassifier:
     """
     Classify an input sample according to possible cuis that correspond to ICD9 labels
     """
 
-    def __init__(self, cl_arg, version, extension=None):
+    def __init__(self, cl_arg, version, prune_icd9=True, extension=None):
 
         """
 
@@ -167,26 +169,39 @@ class RuleBasedClassifier:
         :param threshold: confidence level threshold to include concept
         """
 
-        self.icd9_umls_fname = Path(cl_arg.data_dir) / 'ICD9_umls2020aa'
-        self.cui_discard_set_pfile = Path(cl_arg.data_dir) / 'linked_data' / version / f'{version}_cuis_to_discard.pickle'
-        self.cui_to_discard = None
+        self.data_dir = Path(cl_arg.data_dir)
+        self.icd9_umls_fname = self.data_dir / 'ICD9_umls2020aa'
+        self.cui_discard_set_pfile = self.data_dir / 'linked_data' / version / f'{version}_cuis_to_discard.pickle'
+        self.cuis_to_discard = self._get_cuis_to_discard()
+        self.total_cuis = 0
+        self.total_icd9 = 0
+        self.num_data_set_cuis = 0
+        self.num_data_set_icd9 = 0
         self.cui_to_icd9 = dict()
+        self.cui_to_icd9_collision = dict()
         self.icd9_to_cui = dict()
         self.tui_icd9_to_desc = dict()  # dict[tui][icd9] = desc
         self.extension = extension
         self.nlp = spacy.load(cl_arg.scispacy_model_name) if self.extension else None
         self.linker = UmlsEntityLinker(name=cl_arg.linker_name) if self.extension else None
-        self.min_num_labels = cl_arg.min_num_labels
+        self.min_num_labels = cl_arg.min_num_labels if self.extension else 0
 
-        self._load_cuis_to_discard()
         self._load_icd9_mappings()
 
-    def _load_cuis_to_discard(self):
+        if prune_icd9:
+            # discard icd9 codes not in dataset partitions
+            self.prune_icd9()
+
+    @property
+    def data_set_icd9(self):
+        data_dir = self.cui_discard_set_pfile.parent / 'preprocessed'
+        return get_dataset_icd9_codes(data_dir)
+
+    def _get_cuis_to_discard(self):
         logger.info(f"Loading cuis to discard from pickle fie: {self.cui_discard_set_pfile}...")
         with open(self.cui_discard_set_pfile, 'rb') as handle:
-            self.cui_to_discard = pickle.load(handle)
+            return pickle.load(handle)
 
-    # TODO: prune or add another function to do that!
     def _load_icd9_mappings(self):
         logger.info(f"Creating cui icd9 mapping from file: {self.icd9_umls_fname}...")
         with open(self.icd9_umls_fname) as rfname:
@@ -199,14 +214,52 @@ class RuleBasedClassifier:
                     icd9, cui, tui, desc = line.split('\t')
                 except ValueError:
                     print(f"icd9 code in {line} missing tui and desc")
-                    ic9, cui = line.split('\t')
-                    tui = ""
-                    desc = ""
-                if tui not in self.tui_icd9_to_desc:
-                    self.tui_icd9_to_desc[tui] = dict()
-                self.icd9_to_cui[icd9] = cui
-                self.cui_to_icd9[cui] = icd9
-                self.tui_icd9_to_desc[tui][icd9] = desc
+                    icd9, cui = line.split('\t')
+                    tui = "NA"
+                    desc = "NA"
+                finally:
+                    if tui not in self.tui_icd9_to_desc:
+                        self.tui_icd9_to_desc[tui] = dict()
+                    self.icd9_to_cui[icd9] = cui
+                    if cui in self.cui_to_icd9:
+                        logger.debug(f"{cui} already exists, mapped to {self.cui_to_icd9[cui]}")
+                        if cui not in self.cui_to_icd9_collision:
+                            self.cui_to_icd9_collision[cui] = {icd9}
+                        else:
+                            self.cui_to_icd9_collision[cui].add(icd9)
+                    else:
+                        self.cui_to_icd9[cui] = icd9
+                    self.tui_icd9_to_desc[tui][icd9] = desc
+
+        assert len(self.icd9_to_cui) == (len(self.cui_to_icd9) +
+                                         len({element for val in self.cui_to_icd9_collision.values()
+                                              for element in val}))
+        # update icd9 and cui stats
+        self.total_icd9 = len(self.icd9_to_cui)
+        self.total_cuis = len(self.cui_to_icd9) + len(self.cui_to_icd9_collision)
+        logger.info(f"Mapped {self.total_icd9} ICD9 codes and {self.total_cuis} CUIs.")
+
+    def prune_icd9(self, filename=None):
+        if filename:
+            with open(filename, 'rb') as handle:
+                icd9_to_keep = pickle.load(handle)
+        else:
+            icd9_to_keep = self.data_set_icd9
+
+        icd9_to_discard = set(self.icd9_to_cui.keys()).difference(icd9_to_keep)
+        self.num_data_set_icd9 = len(icd9_to_keep)
+        logger.info(f"No of ICD9 codes in dataset: {self.num_data_set_icd9}")
+        logger.info(f"Getting rid of {len(icd9_to_discard)} ICD codes NOT found in dataset partitions...")
+
+        for icd9 in icd9_to_discard:
+            unwanted_cui = self.icd9_to_cui.pop(icd9, None)
+            self.cui_to_icd9.pop(unwanted_cui, None)
+            self.cui_to_icd9_collision.pop(unwanted_cui, None)
+            for tui, icd_dict in self.tui_icd9_to_desc.items():
+                icd_dict.pop(icd9, None)
+
+        self.num_data_set_cuis = len(self.cui_to_icd9) + len(self.cui_to_icd9_collision)
+        logger.info(f"Dataset has {self.num_data_set_cuis} CUIs")
 
     def _get_similarity_score(self, target_sent, candidate_sent):
         if self.extension:
@@ -220,7 +273,7 @@ class RuleBasedClassifier:
             return 0.0
 
     def _get_all_icd9_from_cui(self, cui):
-        logger.info(f"Getting all icd9 codes related to {cui}")
+        logger.debug(f"Getting all icd9 codes related to {cui}")
         tuis = self.linker.kb.cui_to_entity[cui].types
         icd9_codes = set()
         if len(tuis) < 1:
@@ -233,8 +286,6 @@ class RuleBasedClassifier:
                 continue
         return icd9_codes
 
-    # TODO: instead of using the UMLS linker, look up TUI from the loaded dict, should be faster
-    #   use the label description there instead of defitions
     def _get_most_similar_icd9_from_cui(self, cui, similarity_threshold):
         logger.debug(f"Getting most similar icd9 from {cui}")
         _, _, definitions, tuis, *_ = self.linker.kb.cui_to_entity[cui]
@@ -274,14 +325,15 @@ class RuleBasedClassifier:
     def fit(self, input_sample, similarity_threshold=0.4):
         if not isinstance(input_sample, set):
             input_sample = set(input_sample)
-        if not self.cui_to_discard:
-            self._load_cuis_to_discard()
 
-        pruned_input_cuis = input_sample.difference(self.cui_to_discard)
-        icd9_labels = set()
-        icd9_labels.update({self.cui_to_icd9.get(cui) for cui in pruned_input_cuis
-                            if self.cui_to_icd9.get(cui) is not None})
-        if self.extension and len(icd9_labels) < self.min_num_labels:
+        pruned_input_cuis = input_sample.difference(self.cuis_to_discard)
+        pred_icd9_labels = set()
+        pred_icd9_labels.update({self.cui_to_icd9.get(cui) for cui in pruned_input_cuis if self.cui_to_icd9.get(cui)
+                                 is not None})
+        pred_icd9_labels.update({element for cui in pruned_input_cuis for element in self.cui_to_icd9_collision.get(cui, set())
+                                 if self.cui_to_icd9_collision.get(cui)})
+
+        if self.extension and len(pred_icd9_labels) < self.min_num_labels:
             additional_icd9 = set()
             if self.extension == "all":
                 # add all icd9 codes corresponding to the TUI of the cui that doesn't correspond to an icd9 code
@@ -298,9 +350,9 @@ class RuleBasedClassifier:
                 print(f"Invalid option! Do Nothing!")
                 pass
 
-            icd9_labels.update(additional_icd9)
+            pred_icd9_labels.update(additional_icd9)
 
-        return icd9_labels
+        return pred_icd9_labels
 
 
 def main(cl_args):
@@ -308,7 +360,7 @@ def main(cl_args):
     start_time = time.time()
 
     logger.info(f"Initialize RuleBasedClassifier and ConceptCorpusReader...")
-    rule_based_model = RuleBasedClassifier(cl_args, cl_args.version, cl_args.extension)
+    rule_based_model = RuleBasedClassifier(cl_args, cl_args.version, cl_args.prune, cl_args.extension)
     corpus_reader = ConceptCorpusReader(cl_args.mimic3_dir, cl_args.split, "1")
     corpus_reader.read_umls_file()
 
@@ -338,11 +390,15 @@ if __name__ == "__main__":
         help="Name of mimic-III dataset version to use: full vs 50 (for top50) or 1 for a 1 sample version"
     )
     parser.add_argument(
+        "--prune", action="store", default=True,
+        help="Name of mimic-III dataset version to use: full vs 50 (for top50) or 1 for a 1 sample version"
+    )
+    parser.add_argument(
         "--split", action="store", type=str, default="test",
         help="Partition name: train, dev, test"
     )
     parser.add_argument(
-        "--extension", action="store", default=None,
+        "--extension", action="store", default="all",
         help="Extension type for when cui not matching any icd9, options: best or all"
     )
     parser.add_argument(
@@ -358,7 +414,7 @@ if __name__ == "__main__":
         help="Min threshold for similarity"
     )
     parser.add_argument(
-        "--min_num_labels", action="store", type=int, default=5,
+        "--min_num_labels", action="store", type=int, default=1,
         help="Min threshold for similarity"
     )
     parser.add_argument(

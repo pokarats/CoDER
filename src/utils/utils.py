@@ -39,9 +39,9 @@ def read_from_json(path):
     :param path:
     :return:
     """
+    logger.info(f"Reading from json file saved at: {path}")
     with open(path, mode="r", encoding="utf-8") as in_file:
         data = json.load(in_file)
-    logger.info(f"Data obtained from json file saved at: {path}")
 
     return data
 
@@ -90,6 +90,38 @@ def get_dataset_semantic_types(file_path):
 
     # each line has this format: DEVI|Devices|T074|Medical Device, 3rd item is the semantic type
     return [sem_type[2] for sem_type in lines_from_file(file_path)]
+
+
+def get_dataset_icd9_codes(data_dir,
+                           filename_pattern="*.json",
+                           drop_column_names=['id', 'doc'],
+                           label_column_name='labels_id'):
+    """
+
+    :param data_dir: data directory where all pre-processed data files with labels are (files must contain json data)
+    :type data_dir: str or Path
+    :param filename_pattern: pattern for filenames of the data files
+    :type filename_pattern: str
+    :param drop_column_names: names of columns to drop
+    :type drop_column_names: List of str
+    :param label_column_name: name of the column for the labels
+    :type label_column_name: str
+    :return: set of all labels across partitions in the dataset in data_dir
+    :rtype: set
+    """
+    icd9_code_set = set()
+    for data_file in Path(data_dir).iterdir():
+        if data_file.is_file() and data_file.match(filename_pattern):
+            data = read_from_json(data_file)
+            if drop_column_names:
+                data_df = pd.DataFrame(data).drop(labels=drop_column_names, axis=1)
+            else:
+                data_df = pd.DataFrame(data)
+
+            for labels in data_df[label_column_name]:
+                icd9_code_set.update(labels)
+
+    return icd9_code_set
 
 
 def get_freq_distr_plots(partition_dfs_counters, partition, save_fig=False):
