@@ -65,6 +65,8 @@ label cluster (optional add to baseline) by
 logger = logging.getLogger(__name__)
 
 
+# TODO: add decision_function to be able to extract scores before getting the predicted labels
+#   - would this break MultiOuputClassifier?? Need to test this out
 class ClfSwitcher(BaseEstimator):
     """
      A Custom BaseEstimator that can switch between classifiers.
@@ -141,11 +143,15 @@ class TFIDFBasedClassifier:
         logger.info(f"Executing sklearn tfidf pipeline for stacked classifier")
         self.stack_pipeline.fit(x_train, y_train)
         stack_pred = self.stack_pipeline.predict(x_val)
+        logger.info(f"Evaluating stack model results...")
         self.eval_metrics.append(all_metrics(stack_pred, y_val, k=[1, 3, 5], yhat_raw=None, calc_auc=False))
         stack_model_score = simple_score(stack_pred, y_val, 'stack_model')
         self.eval_scores = pd.concat([self.eval_scores, stack_model_score])
 
 
+# TODO:
+#   - cui-to-icd9 and icd9-to-cui need to have a dataset specific version; 50 and full
+#   - these version specific ones should contain only icd9s and possible cuis in that dataset/version
 class RuleBasedClassifier:
     """
     Classify an input sample according to possible cuis that correspond to ICD9 labels
@@ -180,6 +186,7 @@ class RuleBasedClassifier:
         with open(self.cui_discard_set_pfile, 'rb') as handle:
             self.cui_to_discard = pickle.load(handle)
 
+    # TODO: prune or add another function to do that!
     def _load_icd9_mappings(self):
         logger.info(f"Creating cui icd9 mapping from file: {self.icd9_umls_fname}...")
         with open(self.icd9_umls_fname) as rfname:
@@ -226,6 +233,8 @@ class RuleBasedClassifier:
                 continue
         return icd9_codes
 
+    # TODO: instead of using the UMLS linker, look up TUI from the loaded dict, should be faster
+    #   use the label description there instead of defitions
     def _get_most_similar_icd9_from_cui(self, cui, similarity_threshold):
         logger.debug(f"Getting most similar icd9 from {cui}")
         _, _, definitions, tuis, *_ = self.linker.kb.cui_to_entity[cui]

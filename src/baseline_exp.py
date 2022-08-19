@@ -131,7 +131,7 @@ def main(cl_args):
                                      dataset_cuis['test'],
                                      binarized_labels['test'])
     scores = pd.concat([scores, tfidf_clf.eval_scores])
-    logger.info(f"TFIDF-based stack model results eval by sklearn: \n{scores.head(8)}")
+    logger.info(f"TFIDF-based stack model results eval by sklearn: \n{scores.head(10)}")
     log_metrics(tfidf_clf.eval_metrics[-1])
 
     lapsed_time = (time.time() - start_time)
