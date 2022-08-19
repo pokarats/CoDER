@@ -180,6 +180,7 @@ class RuleBasedClassifier:
         self.cui_to_icd9 = dict()
         self.cui_to_icd9_collision = dict()
         self.icd9_to_cui = dict()
+        self.icd9_to_tui = dict()
         self.tui_icd9_to_desc = dict()  # dict[tui][icd9] = desc
         self.extension = extension
         self.nlp = spacy.load(cl_arg.scispacy_model_name) if self.extension else None
@@ -221,6 +222,7 @@ class RuleBasedClassifier:
                     if tui not in self.tui_icd9_to_desc:
                         self.tui_icd9_to_desc[tui] = dict()
                     self.icd9_to_cui[icd9] = cui
+                    self.icd9_to_tui[icd9] = tui
                     if cui in self.cui_to_icd9:
                         logger.debug(f"{cui} already exists, mapped to {self.cui_to_icd9[cui]}")
                         if cui not in self.cui_to_icd9_collision:
@@ -252,6 +254,7 @@ class RuleBasedClassifier:
         logger.info(f"Getting rid of {len(icd9_to_discard)} ICD codes NOT found in dataset partitions...")
 
         for icd9 in icd9_to_discard:
+            self.icd9_to_tui.pop(icd9, None)
             unwanted_cui = self.icd9_to_cui.pop(icd9, None)
             self.cui_to_icd9.pop(unwanted_cui, None)
             self.cui_to_icd9_collision.pop(unwanted_cui, None)
@@ -260,6 +263,18 @@ class RuleBasedClassifier:
 
         self.num_data_set_cuis = len(self.cui_to_icd9) + len(self.cui_to_icd9_collision)
         logger.info(f"Dataset has {self.num_data_set_cuis} CUIs")
+
+    def write_dataset_icd9_umls(self, filepath, override=False):
+        logger.info(f"Writing dataset icd9 umls mapping to {filepath}...")
+        with open(filepath, 'w+' if override else 'a+') as out_f:
+            for icd9, cui in self.icd9_to_cui.items():
+                tui = self.icd9_to_tui.get(icd9)
+                try:
+                    desc = self.tui_icd9_to_desc[tui][icd9]
+                except KeyError:
+                    desc = "NA"
+                finally:
+                    print(f"{icd9}\t{cui}\t{tui}\t{desc}", file=out_f, end="\n")
 
     def _get_similarity_score(self, target_sent, candidate_sent):
         if self.extension:
@@ -398,7 +413,7 @@ if __name__ == "__main__":
         help="Partition name: train, dev, test"
     )
     parser.add_argument(
-        "--extension", action="store", default="all",
+        "--extension", action="store", default="best",
         help="Extension type for when cui not matching any icd9, options: best or all"
     )
     parser.add_argument(
@@ -428,7 +443,7 @@ if __name__ == "__main__":
         help="Path to pickle file for dict mapping sample idx to output"
     )
     parser.add_argument(
-        "--misc_pickle_file", action="store", type=str, default="misc_pickle",
+        "--misc_pickle_file", action="store", type=str, default="ICD9_umls2020aa",
         help="Path to miscellaneous pickle file e.g. for set of unseen cuis to discard"
     )
     parser.add_argument(
