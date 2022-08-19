@@ -38,7 +38,9 @@ class PrepareData:
         self.linked_data_dir = Path(cl_arg.data_dir) / 'linked_data' / cl_arg.version
         self.preprocessed_data_dir = self.linked_data_dir / 'preprocessed'
         self.cuis_to_discard = None
+        self.rule_based_name = None
         self.all_icd9 = set()
+        self.all_partitions_icd9 = set()
         self.dataset_cuis = dict()
         self.dataset_raw_labels = dict()
         self.dataset_binarized_labels = dict()
@@ -61,13 +63,34 @@ class PrepareData:
                     continue
                 self.all_icd9.add(icd9)
 
+    def reset_partitions_label_set(self):
+        self.all_partitions_icd9 = set()
+
+    def get_all_partitions_icd9(self, partitions=['train', 'dev', 'test'], include_rule_based=False, filename=None):
+        if not self.dataset_raw_labels:
+            for partition in partitions:
+                self.get_partition_labels(partition)
+            if include_rule_based and filename:
+                self.add_predicted_labels(filename)
+            else:
+                raise ValueError(f"Filename missing or options mismatch!!")
+        for key in self.dataset_raw_labels.keys():
+            if key != self.rule_based_name:
+                for labels in self.dataset_raw_labels[key]:
+                    self.all_partitions_icd9.update(labels)
+            if include_rule_based:
+                for labels in self.dataset_raw_labels[self.rule_based_name]:
+                    self.all_partitions_icd9.update(labels)
+
+        return self.all_partitions_icd9
+
     def load_cuis_to_discard(self, filepath):
         logger.info(f"Loading cuis to discard from pickle fie: {filepath}...")
         with open(filepath, 'rb') as handle:
             self.cuis_to_discard = pickle.load(handle)
 
     def init_mlbinarizer(self, labels=None):
-        self.mlbinarizer = MultiLabelBinarizer(classes=tuple(self.all_icd9) if not labels else labels)
+        self.mlbinarizer = MultiLabelBinarizer(classes=tuple(self.all_icd9) if not labels else tuple(labels))
 
     def get_partition_data(self, partition, version, pruning_file="50_cuis_to_discard.pickle"):
         corpus_reader = ConceptCorpusReader(self.linked_data_dir, partition, version)
@@ -96,6 +119,7 @@ class PrepareData:
         return self.dataset_raw_labels[partition]
 
     def add_predicted_labels(self, filename, name='rule_based'):
+        self.rule_based_name = name
         if isinstance(filename, Path) or isinstance(filename, str):
             data_path = self.linked_data_dir / f"{filename}"
             logger.info(f"Get predicted icd9 codes from file: {data_path}...")
@@ -128,18 +152,17 @@ def main(cl_args):
 
     logger.info(f"Preparing data for baselin and/or eval...")
     prep = PrepareData(cl_args)
-    prep.init_mlbinarizer()
     partitions = ['test', 'dev', 'train']
+    all_partitions_labels = prep.get_all_partitions_icd9(partitions, include_rule_based=True, filename=cl_args.filename)
+    prep.init_mlbinarizer(labels=all_partitions_labels)
 
     binarized_labels = dict()
     dataset_cuis = dict()
 
     for split in partitions:
-        _ = prep.get_partition_labels(split)
         binarized_labels[split] = prep.get_binarized_labels(split)
         dataset_cuis[split] = prep.get_partition_data(split, cl_args.version, cl_args.misc_pickle_file)
 
-    _ = prep.add_predicted_labels(cl_args.filename, 'rule_based')
     binarized_labels['rule_based'] = prep.get_binarized_labels('rule_based')
 
     assert len(binarized_labels['test']) == len(binarized_labels['rule_based'])

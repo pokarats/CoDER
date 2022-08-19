@@ -109,7 +109,7 @@ class TFIDFBasedClassifier:
                                                                   tokenizer=token_to_token,
                                                                   preprocessor=token_to_token,
                                                                   ngram_range=(1, 2),
-                                                                  pattern=None)),
+                                                                  token_pattern=None)),
                                         ('stack', self.stacked_clf)])
         self.grid = ParameterGrid({'clf__estimator': (
             MultiOutputClassifier(LogisticRegression(class_weight='balanced',
@@ -122,13 +122,13 @@ class TFIDFBasedClassifier:
             'tfidf__analyzer': ('word',),
             'tfidf__tokenizer': (token_to_token,),
             'tfidf__preprocessor': (token_to_token,),
-            'tfidf__pattern': (None,)})
+            'tfidf__token_pattern': (None,)})
         self.models = ['logreg1', 'logreg2', 'sgd1', 'sgd2', 'svm1', 'svm2']
         self.eval_scores = pd.DataFrame()
         self.eval_metrics = []
 
     def execute_pipeline(self, x_train, y_train, x_val, y_val):
-        logger.info(f"Executing sklearn tfidf pipeline for LogisticRegression, SGDClassifier, and SGDClassifier...")
+        logger.info(f"Executing sklearn tfidf pipeline for LogisticRegression, SGDClassifier, and LinearSVC...")
         for model, params in tqdm(zip(self.models, self.grid), total=len(self.models), desc=f"training pipeline"):
             self.pipeline.set_params(**params)
             self.pipeline.fit(x_train, y_train)
