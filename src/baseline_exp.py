@@ -39,100 +39,115 @@ def main(cl_args):
     """Main loop"""
     start_time = time.time()
 
-    """
-    logger.info(f"\n==========START RULE-BASED MODEL==============\n")
-    logger.info(f"Initialize RuleBasedClassifier and ConceptCorpusReader...")
-    rule_based_model = RuleBasedClassifier(cl_args, cl_args.version, cl_args.extension)
-    corpus_reader = ConceptCorpusReader(cl_args.mimic3_dir, cl_args.split, cl_args.version)
-    corpus_reader.read_umls_file()
+    logger.info(f"\n==========START BASELINE EXP==============\n")
 
-    results = []
-    num_samples = len(corpus_reader.docidx_to_ordered_concepts)
-    logger.info(f"fitting rule-based mode on {cl_args.version} {cl_args.split} partition...")
-    for sample_idx in tqdm(corpus_reader.docidx_to_ordered_concepts.keys(),
-                           total=num_samples,
-                           desc=f"test_{cl_args.version}_cuis"):
-        a_sample = corpus_reader.docidx_to_ordered_concepts[sample_idx]
-        predicted_icd9 = rule_based_model.fit(a_sample, similarity_threshold=cl_args.min)
-        predicted = {'id': sample_idx,
-                     'labels_id': list(predicted_icd9)}
-        results.append(predicted)
+    if cl_args.model == "rule-based":
+        logger.info(f"\n==========START RULE-BASED MODEL==============\n")
+        logger.info(f"Initialize RuleBasedClassifier and ConceptCorpusReader...")
+        rule_based_model = RuleBasedClassifier(cl_args, cl_args.version, prune_icd9=True, extension=cl_args.extension)
+        corpus_reader = ConceptCorpusReader(cl_args.mimic3_dir, cl_args.split, cl_args.version)
+        corpus_reader.read_umls_file()
 
-    sample_results_idx = random.sample(range(0, num_samples), 5)
-    for idx in sample_results_idx:
-        logger.info(f"sample idx {idx} results: \n {results[idx]}")
+        results = []
+        num_samples = len(corpus_reader.docidx_to_ordered_concepts)
+        logger.info(f"Fitting rule-based mode on {cl_args.version} {cl_args.split} on {num_samples} samples...")
+        for sample_idx in tqdm(corpus_reader.docidx_to_ordered_concepts.keys(),
+                               total=num_samples,
+                               desc=f"test_{cl_args.version}_cuis"):
+            a_sample = corpus_reader.docidx_to_ordered_concepts[sample_idx]
+            predicted_icd9 = rule_based_model.fit(a_sample, similarity_threshold=cl_args.min)
+            predicted = {'id': sample_idx,
+                         'labels_id': list(predicted_icd9)}
+            results.append(predicted)
+
+        sample_results_idx = random.sample(range(0, num_samples), 5)
+        for idx in sample_results_idx:
+            logger.info(f"sample idx {idx} results: \n {results[idx]}")
 
     data_folder = Path(cl_args.mimic3_dir)
-    result_file = data_folder / f"{cl_args.version}_{cl_args.dict_pickle_file}.json"
-    write_to_json(results, result_file)
-    """
-    logger.info(f"\n==========START DATA PREP FOR TFIDF MODEL==============\n")
-    logger.info(f"Preparing data for baseline and/or eval...")
-    prep = PrepareData(cl_args)
-    partitions = ['test', 'dev', 'train']
-    all_partitions_labels = prep.get_all_partitions_icd9(partitions, include_rule_based=True, filename=cl_args.filename)
-    prep.init_mlbinarizer(labels=all_partitions_labels)
+    result_file = data_folder / f"{cl_args.version}_{cl_args.result_filename}_{cl_args.extension}.json"
 
-    binarized_labels = dict()
-    dataset_cuis = dict()
+    if cl_args.model == "rule-based":
+        write_to_json(results, result_file)
 
-    for split in partitions:
-        binarized_labels[split] = prep.get_binarized_labels(split)
-        dataset_cuis[split] = prep.get_partition_data(split, cl_args.version, cl_args.misc_pickle_file)
+        logger.info(f"\n==========START DATA PREP FOR RULE-BASED MODEL==============\n")
+        logger.info(f"Preparing data for baseline and/or eval...")
+        prep = PrepareData(cl_args)
+        partitions = ['test', 'dev', 'train']
+        all_partitions_labels = prep.get_all_partitions_icd9(partitions,
+                                                             include_rule_based=True,
+                                                             filename=result_file,
+                                                             add_name=cl_args.add_name)
+        prep.init_mlbinarizer(labels=all_partitions_labels)
 
-    binarized_labels['rule_based'] = prep.get_binarized_labels('rule_based')
+        binarized_labels = dict()
+        dataset_cuis = dict()
 
-    assert len(binarized_labels['test']) == len(binarized_labels['rule_based'])
-    assert len(binarized_labels['train'] == len(dataset_cuis['train']))
+        for split in partitions:
+            binarized_labels[split] = prep.get_binarized_labels(split)
+            dataset_cuis[split] = prep.get_partition_data(split, cl_args.version, cl_args.misc_pickle_file)
 
-    logger.info(f"Sample from train data: \n{dataset_cuis['train'][:3]}")
+        binarized_labels[cl_args.add_name] = prep.get_binarized_labels(cl_args.add_name)
+
+        assert len(binarized_labels['test']) == len(binarized_labels[cl_args.add_name])
+        assert len(binarized_labels['train'] == len(dataset_cuis['train']))
+
+        logger.info(f"Sample from train data: \n{dataset_cuis['train'][:3]}")
 
 
-    logger.info(f"\n==========START EVAL ON RULE-BASED MODEL==============\n")
-    metrics = all_metrics(binarized_labels['rule_based'],
-                          binarized_labels[cl_args.split],
-                          k=[1, 3, 5],
-                          yhat_raw=None,
-                          calc_auc=False)
-    log_metrics(metrics)
+        logger.info(f"\n==========START EVAL ON RULE-BASED MODEL==============\n")
+        metrics = all_metrics(binarized_labels[cl_args.add_name],
+                              binarized_labels[cl_args.split],
+                              k=[1, 3, 5],
+                              yhat_raw=None,
+                              calc_auc=False)
+        log_metrics(metrics)
 
-    scores = pd.DataFrame()
-    rule_based_eval = simple_score(binarized_labels['rule_based'],
-                                   binarized_labels[cl_args.split],
-                                   'rule_based')
-    scores = pd.concat([scores, rule_based_eval])
-    logger.info(f"rule based results eval by sklearn: \n{scores.head()}")
+        scores = pd.DataFrame()
+        rule_based_eval = simple_score(binarized_labels[cl_args.add_name],
+                                       binarized_labels[cl_args.split],
+                                       cl_args.add_name)
+        scores = pd.concat([scores, rule_based_eval])
+        logger.info(f"rule based results eval by sklearn: \n{scores.head()}")
 
-    logger.info(f"\n==========START TFIDF MODELS PIPELINES==============\n")
-    logger.info(f"Re-binarize labels for train, test, val without rule-based labels...")
+    if cl_args.model == 'tfidf':
+        logger.info(f"\n==========START TFIDF MODELS PIPELINES==============\n")
+        logger.info(f"Re-binarize labels for train, test, val without rule-based labels...")
 
-    prep.reset_partitions_label_set()
-    all_partitions_labels = prep.get_all_partitions_icd9(partitions, include_rule_based=False)
-    prep.init_mlbinarizer(labels=all_partitions_labels)
+        prep = PrepareData(cl_args)
+        partitions = ['test', 'dev', 'train']
+        prep.reset_partitions_label_set()
+        all_partitions_labels = prep.get_all_partitions_icd9(partitions)
+        prep.init_mlbinarizer(labels=all_partitions_labels)
 
-    for split in partitions:
-        binarized_labels[split] = prep.get_binarized_labels(split)
-        assert len(binarized_labels[split] == len(dataset_cuis[split]))
+        binarized_labels = dict()
+        dataset_cuis = dict()
+        scores = pd.DataFrame()
 
-    logger.info(f"Trying LogisticRegresion, SGD, and SVM...")
-    tfidf_clf = TFIDFBasedClassifier(cl_args)
-    tfidf_clf.execute_pipeline(dataset_cuis['train'],
-                               binarized_labels['train'],
-                               dataset_cuis['test'],
-                               binarized_labels['test'])
-    scores = pd.concat([scores, tfidf_clf.eval_scores])
-    logger.info(f"TFIDF-based results eval by sklearn: \n{scores.head(7)}")
-    for i in range(len(tfidf_clf.eval_metrics)):
-        log_metrics(tfidf_clf.eval_metrics[i])
+        for split in partitions:
+            binarized_labels[split] = prep.get_binarized_labels(split)
+            dataset_cuis[split] = prep.get_partition_data(split, cl_args.version, cl_args.misc_pickle_file)
+            assert len(binarized_labels[split] == len(dataset_cuis[split]))
 
-    logger.info(f"Trying stack model...")
-    tfidf_clf.execute_stack_pipeline(dataset_cuis['train'],
-                                     binarized_labels['train'],
-                                     dataset_cuis['test'],
-                                     binarized_labels['test'])
-    scores = pd.concat([scores, tfidf_clf.eval_scores])
-    logger.info(f"TFIDF-based stack model results eval by sklearn: \n{scores.head(10)}")
-    log_metrics(tfidf_clf.eval_metrics[-1])
+        logger.info(f"Trying LogisticRegresion, SGD, and SVM...")
+        tfidf_clf = TFIDFBasedClassifier(cl_args)
+        tfidf_clf.execute_pipeline(dataset_cuis['train'],
+                                   binarized_labels['train'],
+                                   dataset_cuis['test'],
+                                   binarized_labels['test'])
+
+        if cl_args.stacked:
+            logger.info(f"Trying stack model...")
+            tfidf_clf.execute_stack_pipeline(dataset_cuis['train'],
+                                             binarized_labels['train'],
+                                             dataset_cuis['test'],
+                                             binarized_labels['test'])
+
+        scores = pd.concat([scores, tfidf_clf.eval_scores])
+        logger.info(f"TFIDF-based model results eval by sklearn: \n{scores.head(10)}")
+
+        for i in range(len(tfidf_clf.eval_metrics)):
+            log_metrics(tfidf_clf.eval_metrics[i])
 
     lapsed_time = (time.time() - start_time)
     time_minute = int(lapsed_time // 60)
@@ -161,6 +176,14 @@ if __name__ == '__main__':
         help="Partition name: train, dev, test"
     )
     parser.add_argument(
+        "--model", action="store", type=str, default="tfidf",
+        help="Name of model to run"
+    )
+    parser.add_argument(
+        "--stacked", action="store", default=True,
+        help="Whether to run stacked model"
+    )
+    parser.add_argument(
         "--extension", action="store", default=None,
         help="Extension type for when cui not matching any icd9, options: best or all"
     )
@@ -181,7 +204,7 @@ if __name__ == '__main__':
         help="Min threshold for similarity"
     )
     parser.add_argument(
-        "--min_num_labels", action="store", type=int, default=7,
+        "--min_num_labels", action="store", type=int, default=1,
         help="Min threshold for num of predicted labels before extending"
     )
     parser.add_argument(
@@ -191,16 +214,20 @@ if __name__ == '__main__':
              "variable ``SCISPACY_CACHE``."
     )
     parser.add_argument(
-        "--dict_pickle_file", action="store", type=str, default="baseline_model_output",
-        help="Path to pickle file for dict mapping sample idx to output"
+        "--result_filename", action="store", type=str, default="baseline_model_output",
+        help="Filename for the result dict for json list of dict mapping sample idx to output, NO SUFFIX"
     )
     parser.add_argument(
-        "--filename", action="store", type=str, default="50_baseline_model_output.json",
+        "--filename", action="store", type=str, default="50_baseline_model_output_all.json",
         help="Rule-based result output file, should be in json format"
     )
     parser.add_argument(
+        "--add_name", action="store", type=str, default="tfidf",
+        help="Rule-based add_name key for param in get_all_partitions_icd9 in prepar_data.py func"
+    )
+    parser.add_argument(
         "--misc_pickle_file", action="store", type=str, default="50_cuis_to_discard.pickle",
-        help="Path to miscellaneous pickle file e.g. for set of unseen cuis to discard"
+        help="Path to miscellaneous pickle file e.g. for set of unseen cuis to discard from concept pruning step"
     )
     parser.add_argument(
         "--n_process", action="store", type=int, default=48,

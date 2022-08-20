@@ -66,14 +66,16 @@ class PrepareData:
     def reset_partitions_label_set(self):
         self.all_partitions_icd9 = set()
 
-    def get_all_partitions_icd9(self, partitions=['train', 'dev', 'test'], include_rule_based=False, filename=None):
+    def get_all_partitions_icd9(self, partitions=['train', 'dev', 'test'],
+                                include_rule_based=False,
+                                filename=None,
+                                add_name='rule-based'):
         if not self.dataset_raw_labels:
             for partition in partitions:
                 self.get_partition_labels(partition)
             if include_rule_based and filename:
-                self.add_predicted_labels(filename)
-            else:
-                raise ValueError(f"Filename missing or options mismatch!!")
+                self.add_predicted_labels(filename, name=add_name)
+
         for key in self.dataset_raw_labels.keys():
             if key != self.rule_based_name:
                 for labels in self.dataset_raw_labels[key]:
@@ -97,7 +99,8 @@ class PrepareData:
         corpus_reader.read_umls_file()
 
         pruning_file_path = self.linked_data_dir / pruning_file
-        self.load_cuis_to_discard(pruning_file_path)
+        if not self.cuis_to_discard:
+            self.load_cuis_to_discard(pruning_file_path)
 
         logger.info(f"Prune cuis from {partition} samples...")
         pruned_samples = []
@@ -119,9 +122,23 @@ class PrepareData:
         return self.dataset_raw_labels[partition]
 
     def add_predicted_labels(self, filename, name='rule_based'):
+        """
+
+        :param filename: results from rule-based model from previous step or saved json file
+        :type filename: Path, str, or actual obj
+        :param name: name to save the results under
+        :type name: str
+        :return: raw labels
+        :rtype: pd.Series
+        """
         self.rule_based_name = name
         if isinstance(filename, Path) or isinstance(filename, str):
-            data_path = self.linked_data_dir / f"{filename}"
+            if isinstance(filename, Path) and filename.exists():
+                data_path = filename
+            elif isinstance(filename, str):
+                data_path = self.linked_data_dir / f"{filename}"
+            else:
+                raise FileNotFoundError
             logger.info(f"Get predicted icd9 codes from file: {data_path}...")
             json_data = read_from_json(data_path)
         else:
