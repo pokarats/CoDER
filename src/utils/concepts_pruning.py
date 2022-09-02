@@ -306,7 +306,7 @@ def main(cl_args):
     logger.info(f"TUIs in MIMIC corresponding to ICD9 codes:\n{mimic_icd9_tuis}")
 
     # get cui freq for all splits
-    all_partitions_dfs = get_dataset_dfs(cl_args.mimic3_dir, ["train", "dev", "test"], "50")
+    all_partitions_dfs = get_dataset_dfs(cl_args.mimic3_dir, ["train", "dev", "test"], cl_args.version)
     pickle_obj(all_partitions_dfs, cl_args, cl_args.dict_pickle_file)
 
     # prune out unseen, too rare/frequent cuis, and cuis whose types not in icd9 types (for a specific partition/split)
@@ -356,12 +356,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--mimic3_dir", action="store", type=str, default="data/linked_data/top50",
+        "--mimic3_dir", action="store", type=str, default="data/linked_data/1",
         help="Path to MIMIC-III data directory containing processed versions with linked_data"
              "of the top-50 and full train/dev/test splits."
     )
     parser.add_argument(
-        "--version", action="store", type=str, default="50",
+        "--version", action="store", type=str, default="1",
         help="Name of mimic-III dataset version to use: full vs 50 (for top50) or 1 for a 1 sample version"
     )
     parser.add_argument(
@@ -369,7 +369,7 @@ if __name__ == "__main__":
         help="Partition name: train, dev, test"
     )
     parser.add_argument(
-        "--split_file", action="store", type=str, default="train_50",
+        "--split_file", action="store", type=str, default="train_1",
         choices=[
             "train_full", "dev_full", "test_full",
             "train_50", "dev_50", "test_50", "dev_1"
@@ -403,15 +403,15 @@ if __name__ == "__main__":
         help="Path to file containing semantic types in the MIMIC-III dataset"
     )
     parser.add_argument(
-        "--pickle_file", action="store", type=str, default="cuis_to_discard",
+        "--pickle_file", action="store", type=str, default="cuis_to_discard_1",
         help="Path to pickle file for set of cuis to discard"
     )
     parser.add_argument(
-        "--dict_pickle_file", action="store", type=str, default="pruned_partitions_dfs_dict",
+        "--dict_pickle_file", action="store", type=str, default="pruned_partitions_dfs_dict_1",
         help="Path to pickle file for partitions dfs dict of counters"
     )
     parser.add_argument(
-        "--misc_pickle_file", action="store", type=str, default="unseen_cuis",
+        "--misc_pickle_file", action="store", type=str, default="unseen_cuis_1",
         help="Path to miscellaneous pickle file e.g. for set of unseen cuis to discard"
     )
     parser.add_argument(
@@ -440,7 +440,6 @@ if __name__ == "__main__":
 
     logging.basicConfig(format="%(asctime)s - %(filename)s:%(funcName)s %(levelname)s: %(message)s",
                         filename=log_file,
-                        disable_existing_loggers=False,
                         level=logging.INFO)
 
     # Manage the LOG and where to pipe it (log file only or log file + STDOUT)
