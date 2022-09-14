@@ -9,7 +9,7 @@ MEM_PER_CPU=8GB
 ENV=multirescnn
 export python=/netscratch/pokarats/anaconda3/envs/$ENV/bin/python3.7
 
-mimic3_dir=data/mimic3
+mimic3_dir=/netscratch/pokarats/ds/linked_data/50
 split=train
 split_file=train_50
 model=en_core_sci_lg
