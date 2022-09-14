@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env python
 
 # SLURM environment arguments
 IMAGE=/netscratch/enroot/dlcc_pytorch_20.07.sqsh

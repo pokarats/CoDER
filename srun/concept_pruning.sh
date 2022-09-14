@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env python
 
 # SLURM environment arguments
 IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_base1.sqsh
