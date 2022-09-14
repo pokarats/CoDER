@@ -1,11 +1,13 @@
 #!/bin/sh
 
 # SLURM environment arguments
-IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_base1.sqsh
+IMAGE=/netscratch/enroot/dlcc_pytorch_20.07.sqsh
 NUM_CPUS=8
 MEM_PER_CPU=8GB
 
 # Change anaconda environment
+ENV=multirescnn
+export python=/netscratch/pokarats/anaconda3/envs/multir$ENVescnn/bin/python
 
 mimic3_dir=$MYDATA/linked_data/50
 split=train
@@ -26,7 +28,7 @@ srun -K -p batch \
   --cpus-per-task=$NUM_CPUS \
   --mem-per-cpu=$MEM_PER_CPU \
   --nodes=1 \
-python concepts_pruning.py \
+$python concepts_pruning.py \
   --mimic3_dir $mimic3_dir \
   --version 50\
   --split $split \
