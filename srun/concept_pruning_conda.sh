@@ -7,7 +7,7 @@ MEM_PER_CPU=8GB
 
 # Change anaconda environment
 ENV=multirescnn
-export python=/netscratch/pokarats/anaconda3/envs/multir$ENVescnn/bin/python
+export python=/netscratch/pokarats/anaconda3/envs/$ENV/bin/python
 
 mimic3_dir=$MYDATA/linked_data/50
 split=train
