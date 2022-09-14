@@ -385,14 +385,6 @@ if __name__ == "__main__":
         help="SciSpacy UMLS Entity Linker name. e.g. scispacy_linker"
     )
     parser.add_argument(
-        "--min", action="store", type=int, default=4,
-        help="Min frequency threshold to include cuis"
-    )
-    parser.add_argument(
-        "--max", action="store", type=int, default=8000,
-        help="Max frequency threshold to include cuis"
-    )
-    parser.add_argument(
         "--cache_dir", action="store", type=str,
         default="/Users/noonscape/Documents/msc_thesis/projects/CoDER/scratch/scispacy",
         help="Path to SciSpacy cache directory. Optionally, set the environment "
@@ -411,7 +403,7 @@ if __name__ == "__main__":
         help="Path to pickle file for partitions dfs dict of counters"
     )
     parser.add_argument(
-        "--misc_pickle_file", action="store", type=str, default="unseen_cuis_1",
+        "--misc_pickle_file", action="store", type=str, default="x",
         help="Path to miscellaneous pickle file e.g. for set of unseen cuis to discard"
     )
     parser.add_argument(
