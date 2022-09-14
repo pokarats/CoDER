@@ -20,12 +20,13 @@ batch_size=4096
 
 
 srun -K -p batch \
-  --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,`pwd`:`pwd` \
-  --container-workdir=`pwd` \
+  --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
+  --container-workdir="$(pwd)" \
   --container-image=$IMAGE \
   --cpus-per-task=$NUM_CPUS \
   --mem-per-cpu=$MEM \
   --nodes=1 \
+  $@
   python src/utils/concepts_pruning.py \
   --mimic3_dir $mimic3_dir \
   --version 50\
@@ -37,4 +38,5 @@ srun -K -p batch \
   --pickle_file $pickle_file \
   --dict_pickle_file $dict_pickle \
   --n_process $NUM_CPUS \
-  --batch_size $batch_size
+  --batch_size $batch_size \
+  $@
