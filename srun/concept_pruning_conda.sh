@@ -28,7 +28,7 @@ srun -K -p batch \
   --cpus-per-task=$NUM_CPUS \
   --mem-per-cpu=$MEM_PER_CPU \
   --nodes=1 \
-$python concepts_pruning.py \
+$python src/utils/concepts_pruning.py \
   --mimic3_dir $mimic3_dir \
   --version 50\
   --split $split \
