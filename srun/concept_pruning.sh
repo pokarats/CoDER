@@ -24,9 +24,9 @@ srun -K -p batch \
   --container-workdir="$(pwd)" \
   --container-image=$IMAGE \
   --cpus-per-task=$NUM_CPUS \
-  --mem-per-cpu=$MEM \
+  --mem-per-cpu=$MEM_PER_CPU \
   --nodes=1 \
-  python src/utils/concepts_pruning.py \
+python src/utils/concepts_pruning.py \
   --mimic3_dir $mimic3_dir \
   --version 50\
   --split $split \
@@ -38,4 +38,4 @@ srun -K -p batch \
   --dict_pickle_file $dict_pickle \
   --n_process $NUM_CPUS \
   --batch_size $batch_size \
-  $@
+$@
