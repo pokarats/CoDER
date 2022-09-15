@@ -53,7 +53,7 @@ do
     --extension $ext \
     --stacked False \
     --cache_dir $cache \
-    --misc_pickle_file $pickle_file \
+    --misc_pickle_file "$pickle_file".pickle \
     --add_name rule-based-$ext \
     --filename "$vers"_cuis_to_discard_"$ext"\
     --n_process $NUM_CPUS
