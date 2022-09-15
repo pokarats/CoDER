@@ -10,14 +10,15 @@ MEM_PER_CPU=8GB
 # Change anaconda environment
 
 mimic3_dir=$MYDATA/linked_data/"$1"
+vers="$1"
 split=train
-split_file=train_"$1"
+split_file=train_$vers
 model=en_core_sci_lg
 linker=scispacy_linker
 cache=/netscratch/pokarats/cache/scispacy
 sem_file=$MYDATA/mimic3/semantic_types_mimic.txt
-pickle_file="$1"_cuis_to_discard
-dict_pickle="$1"_pruned_partitions_dfs_dict
+pickle_file=$vers_cuis_to_discard
+dict_pickle=$vers_pruned_partitions_dfs_dict
 batch_size=4096
 
 
@@ -31,7 +32,7 @@ srun -K -p batch \
   --nodes=1 \
 python src/utils/concepts_pruning.py \
   --mimic3_dir $mimic3_dir \
-  --version "$1"\
+  --version $vers \
   --split $split \
   --split_file $split_file \
   --scispacy_model_name $model \
