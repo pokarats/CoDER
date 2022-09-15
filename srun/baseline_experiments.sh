@@ -43,7 +43,7 @@ do
   do
     echo "Submitting version: $vers and extension option: $ext"
 
-    srun -K -p batch \
+    srun -K -p RTXA6000-MLT \
       --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
       --container-workdir="$(pwd)" \
       --container-image=$IMAGE \
