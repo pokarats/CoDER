@@ -8,7 +8,7 @@ NUM_CPUS=32
 MEM_PER_CPU=8GB
 
 # variables for srun and python
-vers=50
+vers=full
 mimic3_dir=$MYDATA/linked_data/$vers
 split=train
 split_file=train_$vers

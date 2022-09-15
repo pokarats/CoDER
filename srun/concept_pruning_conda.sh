@@ -33,7 +33,7 @@ srun -K -p batch \
   --nodes=1 \
 $python src/utils/concepts_pruning.py \
   --mimic3_dir $mimic3_dir \
-  --version $vers\
+  --version $vers \
   --split $split \
   --split_file $split_file \
   --scispacy_model_name $model \
