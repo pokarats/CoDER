@@ -16,8 +16,8 @@ model=en_core_sci_lg
 linker=scispacy_linker
 cache=/netscratch/pokarats/cache/scispacy
 sem_file=$MYDATA/mimic3/semantic_types_mimic.txt
-pickle_file="$vers"_cuis_to_discard
-dict_pickle="$vers"_pruned_partitions_dfs_dict
+pickle_file=cuis_to_discard
+dict_pickle=pruned_partitions_dfs_dict
 batch_size=4096
 
 

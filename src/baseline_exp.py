@@ -14,6 +14,8 @@ DESCRIPTION: Python template with an argument parser and logger. Put all the "ma
 """
 
 import sys
+import os
+import platform
 import time
 import random
 from datetime import date
@@ -21,16 +23,18 @@ import logging
 import argparse
 import traceback
 import pandas as pd
+from pathlib import Path
+from tqdm import tqdm
+import numpy as np
 import json
 
+if platform.system() != 'Darwin':
+    sys.path.append(os.getcwd())  # only needed for slurm
 from utils.concepts_pruning import ConceptCorpusReader
 from utils.prepare_data import PrepareData
 from utils.eval import all_metrics, log_metrics, simple_score
 from utils.utils import write_to_json
 from models.baseline_models import RuleBasedClassifier, TFIDFBasedClassifier
-from pathlib import Path
-from tqdm import tqdm
-import numpy as np
 
 
 # TODO: write wrapper class for model selection between baseline models
