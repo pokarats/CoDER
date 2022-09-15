@@ -33,7 +33,7 @@ python src/baseline_exp.py \
   --add_name rule-based-None \
   --filename "$vers"_cuis_to_discard_None\
   --n_process $NUM_CPUS \
-  --batch_size $batch_size
+
 
 for ext in best all
 do
@@ -56,8 +56,7 @@ do
     --misc_pickle_file $pickle_file \
     --add_name rule-based-$ext \
     --filename "$vers"_cuis_to_discard_"$ext"\
-    --n_process $NUM_CPUS \
-    --batch_size $batch_size
+    --n_process $NUM_CPUS
 done
 
 srun -K -p batch \
@@ -79,4 +78,3 @@ python src/baseline_exp.py \
   --add_name tfidf \
   --filename "$vers"_cuis_to_discard_None \
   --n_process $NUM_CPUS \
-  --batch_size $batch_size
