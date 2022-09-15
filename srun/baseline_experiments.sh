@@ -41,7 +41,6 @@ do
       --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
       --container-workdir="$(pwd)" \
       --container-image=$IMAGE \
-      --export=ALL,SCISPACY_CACHE=/netscratch/pokarats/cache/scispacy \
       --cpus-per-task=$NUM_CPUS \
       --mem-per-cpu=$MEM_PER_CPU \
       --nodes=1 \
