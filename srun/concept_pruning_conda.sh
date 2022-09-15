@@ -15,6 +15,7 @@ split_file=train_50
 model=en_core_sci_lg
 linker=scispacy_linker
 cache=/netscratch/pokarats/cache/scispacy
+sem_file=$MYDATA/mimic3/semantic_types_mimic.txt
 pickle_file=cuis_to_discard_50
 dict_pickle=pruned_partitions_dfs_dict_50
 batch_size=4096
@@ -36,6 +37,7 @@ $python src/utils/concepts_pruning.py \
   --scispacy_model_name $model \
   --linker_name $linker \
   --cache_dir $cache \
+  --semantic_type_file $sem_file \
   --pickle_file $pickle_file \
   --dict_pickle_file $dict_pickle \
   --n_process $NUM_CPUS \
