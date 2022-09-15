@@ -1,24 +1,25 @@
 #!/bin/sh
 
 # SLURM environment arguments
+SCISPACY_CACHE=/netscratch/pokarats/cache/scispacy
 MYDATA=/netscratch/pokarats/ds
 IMAGE=/netscratch/enroot/dlcc_pytorch_20.07.sqsh
-NUM_CPUS=8
+NUM_CPUS=32
 MEM_PER_CPU=8GB
 
 # Change anaconda environment
 ENV=multirescnn
 export python=/netscratch/pokarats/anaconda3/envs/$ENV/bin/python
 
-mimic3_dir=$MYDATA/linked_data/50
+mimic3_dir=$MYDATA/linked_data/"$1"
 split=train
-split_file=train_50
+split_file=train_"$1"
 model=en_core_sci_lg
 linker=scispacy_linker
 cache=/netscratch/pokarats/cache/scispacy
 sem_file=$MYDATA/mimic3/semantic_types_mimic.txt
-pickle_file=cuis_to_discard_50
-dict_pickle=pruned_partitions_dfs_dict_50
+pickle_file=cuis_to_discard_"$1"
+dict_pickle=pruned_partitions_dfs_dict_"$1"
 batch_size=4096
 
 
@@ -32,7 +33,7 @@ srun -K -p batch \
   --nodes=1 \
 $python src/utils/concepts_pruning.py \
   --mimic3_dir $mimic3_dir \
-  --version 50\
+  --version "$1"\
   --split $split \
   --split_file $split_file \
   --scispacy_model_name $model \
