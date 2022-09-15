@@ -1,6 +1,7 @@
 #!/bin/sh
 
 # SLURM environment arguments
+MYDATA=/netscratch/pokarats/ds
 IMAGE=/netscratch/enroot/dlcc_pytorch_20.07.sqsh
 NUM_CPUS=8
 MEM_PER_CPU=8GB

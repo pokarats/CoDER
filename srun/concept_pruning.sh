@@ -1,6 +1,7 @@
 #!/bin/sh
 
 # SLURM environment arguments
+MYDATA=/netscratch/pokarats/ds
 IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_base1.sqsh
 NUM_CPUS=8
 MEM_PER_CPU=8GB
