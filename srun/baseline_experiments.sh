@@ -8,12 +8,14 @@ NUM_CPUS=32
 MEM_PER_CPU=8GB
 
 # variables for srun and python
-for vers in 50 full
+for vers in "50" full
 do
   mimic3_dir=$MYDATA/linked_data/$vers
   split=test
   cache=/netscratch/pokarats/cache/scispacy
   pickle_file="$vers"_cuis_to_discard
+
+  echo "Submitting version: $vers"
 
   srun -K -p batch \
     --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
@@ -37,6 +39,8 @@ do
 
   for ext in best all
   do
+    echo "Submitting version: $vers and extension option: $ext"
+
     srun -K -p batch \
       --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
       --container-workdir="$(pwd)" \
@@ -59,3 +63,5 @@ do
       --n_process $NUM_CPUS
   done
 done
+
+
