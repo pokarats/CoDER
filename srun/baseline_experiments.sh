@@ -4,7 +4,7 @@
 export SCISPACY_CACHE=/netscratch/pokarats/cache/scispacy
 MYDATA=/netscratch/pokarats/ds
 IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_base1.sqsh
-NUM_CPUS=32
+NUM_CPUS=8
 MEM_PER_CPU=8GB
 
 # variables for srun and python
@@ -17,7 +17,7 @@ do
 
   echo "Submitting version: $vers"
 
-  srun -K -p batch \
+  srun -K -p RTXA6000-MLT \
     --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
     --container-workdir="$(pwd)" \
     --container-image=$IMAGE \
@@ -36,6 +36,8 @@ do
     --add_name rule-based-None \
     --filename "$vers"_cuis_to_discard_None \
     --n_process $NUM_CPUS
+
+  sleep 1
 
   for ext in best all
   do
@@ -61,6 +63,7 @@ do
       --add_name rule-based-$ext \
       --filename "$vers"_cuis_to_discard_"$ext" \
       --n_process $NUM_CPUS
+      sleep 1
   done
 done
 

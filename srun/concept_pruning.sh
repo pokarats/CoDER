@@ -9,17 +9,16 @@ MEM_PER_CPU=8GB
 
 # variables for srun and python
 vers=full
-mimic3_dir=$MYDATA/linked_data/$vers
+mimic3_dir="$MYDATA"/linked_data/$vers
 split=train
 split_file=train_$vers
 model=en_core_sci_lg
 linker=scispacy_linker
 cache=/netscratch/pokarats/cache/scispacy
-sem_file=$MYDATA/mimic3/semantic_types_mimic.txt
+sem_file="$MYDATA"/mimic3/semantic_types_mimic.txt
 pickle_file=cuis_to_discard
 dict_pickle=pruned_partitions_dfs_dict
 batch_size=4096
-
 
 
 srun -K -p batch \
