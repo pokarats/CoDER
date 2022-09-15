@@ -1,6 +1,7 @@
 #!/bin/sh
 
 # SLURM environment arguments
+export SCISPACY_CACHE=/netscratch/pokarats/cache/scispacy
 MYDATA=/netscratch/pokarats/ds
 IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_base1.sqsh
 NUM_CPUS=32
@@ -18,7 +19,6 @@ do
     --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
     --container-workdir="$(pwd)" \
     --container-image=$IMAGE \
-    --export=ALL,SCISPACY_CACHE=/netscratch/pokarats/cache/scispacy \
     --cpus-per-task=$NUM_CPUS \
     --mem-per-cpu=$MEM_PER_CPU \
     --nodes=1 \
@@ -32,7 +32,7 @@ do
     --cache_dir $cache \
     --misc_pickle_file "$pickle_file".pickle \
     --add_name rule-based-None \
-    --filename "$vers"_cuis_to_discard_None\
+    --filename "$vers"_cuis_to_discard_None \
     --n_process $NUM_CPUS
 
   for ext in best all
@@ -56,7 +56,7 @@ do
       --cache_dir $cache \
       --misc_pickle_file "$pickle_file".pickle \
       --add_name rule-based-$ext \
-      --filename "$vers"_cuis_to_discard_"$ext"\
+      --filename "$vers"_cuis_to_discard_"$ext" \
       --n_process $NUM_CPUS
   done
 done
