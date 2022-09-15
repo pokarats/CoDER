@@ -60,25 +60,3 @@ do
       --n_process $NUM_CPUS
   done
 done
-
-
-srun -K -p batch \
-  --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
-  --container-workdir="$(pwd)" \
-  --container-image=$IMAGE \
-  --export=ALL,SCISPACY_CACHE=/netscratch/pokarats/cache/scispacy \
-  --cpus-per-task=$NUM_CPUS \
-  --mem-per-cpu=$MEM_PER_CPU \
-  --nodes=1 \
-python src/baseline_exp.py \
-  --data_dir $MYDATA \
-  --mimic3_dir $mimic3_dir \
-  --version $vers \
-  --split $split \
-  --model tfidf \
-  --stacked True \
-  --cache_dir $cache \
-  --misc_pickle_file "$pickle_file".pickle \
-  --add_name tfidf \
-  --filename "$vers"_cuis_to_discard_None \
-  --n_process $NUM_CPUS \
