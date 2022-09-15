@@ -13,6 +13,7 @@ DESCRIPTION: Python template with an argument parser and logger. Put all the "ma
 """
 
 import sys
+import os
 import time
 from datetime import date
 import logging
@@ -21,11 +22,12 @@ import traceback
 import collections
 import json
 
-
-from src.utils.utils import get_freq_distr_plots, pickle_obj, get_dataset_semantic_types, prune_dfs_dict
 from scispacy.umls_linking import UmlsEntityLinker
 from pathlib import Path
 from tqdm import tqdm
+
+sys.path.append(os.getcwd())
+from src.utils.utils import get_freq_distr_plots, pickle_obj, get_dataset_semantic_types, prune_dfs_dict
 
 
 logger = logging.getLogger(__name__)
