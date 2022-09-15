@@ -7,7 +7,8 @@ IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_base1.sqsh
 NUM_CPUS=32
 MEM_PER_CPU=8GB
 
-# Change anaconda environment
+# variables for srun and python
+"$@"
 
 mimic3_dir=$MYDATA/linked_data/"$1"
 vers="$1"
@@ -43,4 +44,4 @@ python src/utils/concepts_pruning.py \
   --dict_pickle_file $dict_pickle \
   --n_process $NUM_CPUS \
   --batch_size $batch_size \
-$@
+

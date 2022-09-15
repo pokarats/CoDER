@@ -11,6 +11,8 @@ MEM_PER_CPU=8GB
 ENV=multirescnn
 export python=/netscratch/pokarats/anaconda3/envs/$ENV/bin/python
 
+"$@"
+
 mimic3_dir=$MYDATA/linked_data/"$1"
 vers="$1"
 split=train
@@ -22,7 +24,6 @@ sem_file=$MYDATA/mimic3/semantic_types_mimic.txt
 pickle_file=cuis_to_discard_$vers
 dict_pickle=pruned_partitions_dfs_dict_$vers
 batch_size=4096
-
 
 
 srun -K -p batch \
@@ -45,4 +46,4 @@ $python src/utils/concepts_pruning.py \
   --dict_pickle_file $dict_pickle \
   --n_process $NUM_CPUS \
   --batch_size $batch_size \
-$@
+
