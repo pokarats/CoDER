@@ -188,6 +188,10 @@ if __name__ == '__main__':
         help="Whether to run stacked model"
     )
     parser.add_argument(
+        "--extra", action="store", default=False,
+        help="Whether to run TFIDF Model with extra param options"
+    )
+    parser.add_argument(
         "--extension", action="store", default=None,
         help="Extension type for when cui not matching any icd9, options: best or all"
     )

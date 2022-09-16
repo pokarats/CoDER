@@ -69,7 +69,7 @@ class ClfSwitcher(BaseEstimator):
     """
      A Custom BaseEstimator that can switch between classifiers.
     """
-    def __init__(self, estimator=MultiOutputClassifier(LinearSVC())):
+    def __init__(self, estimator=OneVsRestClassifier(LinearSVC())):
         """
 
         :param estimator: the classifier
@@ -100,14 +100,34 @@ class ClfSwitcher(BaseEstimator):
 class TFIDFBasedClassifier:
     def __init__(self, cl_arg):
         self.seed = cl_arg.seed
-        self.stacked_clf = OneVsRestClassifier(
-            StackingClassifier([('logreg2', LogisticRegression(class_weight='balanced',
-                                                               random_state=self.seed)),
-                                ('sgd2', SGDClassifier(class_weight='balanced',
-                                                       random_state=self.seed,
-                                                       loss='modified_huber')),
-                                ('svm2', LinearSVC(class_weight='balanced',
-                                                   random_state=self.seed))]), n_jobs=-1)
+        if cl_arg.extra:
+            self.loss = 'modified_huber'
+            self.solver = 'lbfgs'
+            self.class_weight = 'balanced'
+        else:
+            self.loss = 'hinge'
+            self.solver = 'liblinear'
+            self.class_weight = None
+
+        if cl_arg.version == '50':
+            self.stacked_clf = OneVsRestClassifier(
+                StackingClassifier([('logreg2', LogisticRegression(class_weight=self.class_weight,
+                                                                   random_state=self.seed,
+                                                                   solver=self.solver)),
+                                    ('sgd2', SGDClassifier(class_weight=self.class_weight,
+                                                           random_state=self.seed,
+                                                           loss=self.loss)),
+                                    ('svm2', LinearSVC(class_weight=self.class_weight,
+                                                       random_state=self.seed))]), n_jobs=-1)
+        elif cl_arg.version == 'full':
+            self.stacked_clf = OneVsRestClassifier(
+                StackingClassifier([('sgd2', SGDClassifier(class_weight=self.class_weight,
+                                                           random_state=self.seed,
+                                                           loss=self.loss)),
+                                    ('svm2', LinearSVC(class_weight=self.class_weight,
+                                                       random_state=self.seed))]), n_jobs=-1)
+        else:
+            raise ValueError(f"{cl_arg.version} is an invalid option!!!")
         self.pipeline = Pipeline([('tfidf', TfidfVectorizer()),
                                   ('clf', ClfSwitcher())])
         self.stack_pipeline = Pipeline([('tfidf', TfidfVectorizer(analyzer='word',
@@ -117,18 +137,21 @@ class TFIDFBasedClassifier:
                                                                   token_pattern=None)),
                                         ('stack', self.stacked_clf)])
         self.grid = ParameterGrid({'clf__estimator': (
-            OneVsRestClassifier(LogisticRegression(class_weight='balanced',
-                                                     random_state=self.seed), n_jobs=-1),
-            OneVsRestClassifier(SGDClassifier(class_weight='balanced',
-                                                random_state=self.seed,
-                                                loss='modified_huber'), n_jobs=-1),
-            OneVsRestClassifier(LinearSVC(class_weight='balanced', random_state=self.seed), n_jobs=-1)),
+            OneVsRestClassifier(LogisticRegression(class_weight=self.class_weight,
+                                                   random_state=self.seed,
+                                                   solver=self.solver), n_jobs=-1),
+            OneVsRestClassifier(SGDClassifier(class_weight=self.class_weight,
+                                              random_state=self.seed,
+                                              loss=self.loss), n_jobs=-1),
+            OneVsRestClassifier(LinearSVC(class_weight=self.class_weight,
+                                          random_state=self.seed), n_jobs=-1)),
             'tfidf__ngram_range': ((1, 1), (1, 2)),
             'tfidf__analyzer': ('word',),
             'tfidf__tokenizer': (token_to_token,),
             'tfidf__preprocessor': (token_to_token,),
             'tfidf__token_pattern': (None,)})
-        self.models = ['logreg1', 'logreg2', 'sgd1', 'sgd2', 'svm1', 'svm2']
+        self.models = ['logreg_n1', 'logreg_n2', 'sgd_n1', 'sgd_n2',
+                       'svm_n1', 'svm_n2']
         self.eval_scores = pd.DataFrame()
         self.eval_metrics = []
 
@@ -401,12 +424,12 @@ if __name__ == "__main__":
              "of the top-50 and full train/dev/test splits."
     )
     parser.add_argument(
-        "--version", action="store", type=str, default="50",
+        "--version", action="store", type=str, default="1",
         help="Name of mimic-III dataset version to use: full vs 50 (for top50) or 1 for a 1 sample version"
     )
     parser.add_argument(
         "--prune", action="store", default=True,
-        help="Name of mimic-III dataset version to use: full vs 50 (for top50) or 1 for a 1 sample version"
+        help="Whether to prune labels set to only those in data set"
     )
     parser.add_argument(
         "--split", action="store", type=str, default="test",
@@ -430,7 +453,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--min_num_labels", action="store", type=int, default=1,
-        help="Min threshold for similarity"
+        help="Min threshold for number of labels"
     )
     parser.add_argument(
         "--cache_dir", action="store", type=str,
