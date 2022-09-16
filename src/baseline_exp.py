@@ -96,7 +96,6 @@ def main(cl_args):
 
         logger.info(f"Samples from train data: \n{dataset_cuis['train'][:3]}")
 
-
         logger.info(f"\n==========START EVAL ON RULE-BASED MODEL==============\n")
         metrics = all_metrics(binarized_labels[cl_args.add_name].toarray(),
                               binarized_labels[cl_args.split].toarray(),
@@ -110,11 +109,11 @@ def main(cl_args):
                                        binarized_labels[cl_args.split],
                                        cl_args.add_name)
         scores = pd.concat([scores, rule_based_eval])
-        logger.info(f"rule based results eval by sklearn: \n{scores.head()}")
+        logger.info(f"rule based results eval by sklearn: \n{scores.head()}\n")
 
     if cl_args.model == 'tfidf':
         logger.info(f"\n==========START TFIDF MODELS PIPELINES==============\n")
-        logger.info(f"Binarize labels for train, test, val without rule-based labels...")
+        logger.info(f"Binarize labels for train, test, val without rule-based labels...\n")
 
         prep = PrepareData(cl_args)
         partitions = ['test', 'dev', 'train']
@@ -131,15 +130,15 @@ def main(cl_args):
             dataset_cuis[split] = prep.get_partition_data(split, cl_args.version, cl_args.misc_pickle_file)
             assert binarized_labels[split].shape[0] == len(dataset_cuis[split])
 
-        logger.info(f"Trying LogisticRegresion, SGD, and SVM...")
+        logger.info(f"Trying TFIDFBasedClassifiers: LogisticRegression (maybe skipped), SGD, and SVM...\n")
         tfidf_clf = TFIDFBasedClassifier(cl_args)
         tfidf_clf.execute_pipeline(dataset_cuis['train'],
                                    binarized_labels['train'],
                                    dataset_cuis['test'],
                                    binarized_labels['test'])
 
-        if cl_args.stacked:
-            logger.info(f"Trying stack model...")
+        if cl_args.version == '50' and cl_args.stacked:
+            logger.info(f"Trying TFIDF StackingClassifier for dataset verion {cl_args.version}...\n")
             tfidf_clf.execute_stack_pipeline(dataset_cuis['train'],
                                              binarized_labels['train'],
                                              dataset_cuis['test'],
@@ -150,6 +149,8 @@ def main(cl_args):
 
         for i in range(len(tfidf_clf.eval_metrics)):
             log_metrics(tfidf_clf.eval_metrics[i])
+
+        logger.info(f"\n==========FINISHED TFIDF MODELS PIPELINES==============\n")
 
     lapsed_time = (time.time() - start_time)
     time_minute = int(lapsed_time // 60)
@@ -182,15 +183,15 @@ if __name__ == '__main__':
         help="Name of model to run"
     )
     parser.add_argument(
-        "--stacked", action="store", default=True,
-        help="Whether to run stacked model"
+        "--stacked", action="store_true",
+        help="Whether to run stacked model, for the top50 data version only"
     )
     parser.add_argument(
-        "--extra", action="store", default=True,
-        help="Whether to run TFIDF Model with extra param options"
+        "--extra", action="store_true",
+        help="Whether to run TFIDF Model with extra non-default param options"
     )
     parser.add_argument(
-        "--skip_logreg", action="store", default=True,
+        "--skip_logreg", action="store_true",
         help="Whether to run TFIDF Model with Logistic Regression or to skip it; True == skip"
     )
     parser.add_argument(
@@ -210,7 +211,7 @@ if __name__ == '__main__':
         help="SciSpacy UMLS Entity Linker name. e.g. scispacy_linker"
     )
     parser.add_argument(
-        "--min", action="store", type=int, default=0.7,
+        "--min", action="store", type=float, default=0.7,
         help="Min threshold for similarity"
     )
     parser.add_argument(
@@ -248,7 +249,7 @@ if __name__ == '__main__':
         help="Batch size to use in combination with spaCy multi-processing."
     )
     parser.add_argument(
-        "--quiet", action="store_true", default=False,
+        "--quiet", action="store_true",
         help="Do not print to stdout (log only)."
     )
 

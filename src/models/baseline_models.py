@@ -116,7 +116,7 @@ class TFIDFBasedClassifier:
         if cl_arg.version == '50':
             self.stacked_clf = OneVsRestClassifier(
                 StackingClassifier([('logreg2', LogisticRegression(class_weight=self.class_weight,
-                                                                   dual=True,
+                                                                   dual=True if self.solver == 'liblinear' else False,
                                                                    C=self.regularizer,
                                                                    random_state=self.seed,
                                                                    solver=self.solver,
@@ -130,17 +130,11 @@ class TFIDFBasedClassifier:
                                                        C=self.regularizer,
                                                        random_state=self.seed))]), n_jobs=-1)
         elif cl_arg.version == 'full':
-            self.stacked_clf = OneVsRestClassifier(
-                StackingClassifier([('sgd2', SGDClassifier(class_weight=self.class_weight,
-                                                           random_state=self.seed,
-                                                           learning_rate=self.lr,
-                                                           eta0=self.eta0,
-                                                           loss=self.loss)),
-                                    ('svm2', LinearSVC(class_weight=self.class_weight,
-                                                       C=self.regularizer,
-                                                       random_state=self.seed))]), n_jobs=-1)
+            # no support for CV for StackingClassifier as CV results in some splits not seeing some label classes
+            # this causes a ValueError!
+            self.stacked_clf = None
         else:
-            raise ValueError(f"{cl_arg.version} is an invalid option!!!")
+            raise ValueError(f"{cl_arg.version} is NOT a valid option!!!")
 
         self.pipeline = Pipeline([('tfidf', TfidfVectorizer()),
                                   ('clf', ClfSwitcher())])
@@ -169,7 +163,7 @@ class TFIDFBasedClassifier:
         else:
             self.grid = ParameterGrid({'clf__estimator': (
                 OneVsRestClassifier(LogisticRegression(class_weight=self.class_weight,
-                                                       dual=True,
+                                                       dual=True if self.solver == 'liblinear' else False,
                                                        C=self.regularizer,
                                                        random_state=self.seed,
                                                        solver=self.solver,
@@ -222,22 +216,28 @@ class TFIDFBasedClassifier:
 
         for model, params in tqdm(zip(self.models, self.grid), total=len(self.models), desc=f"training pipeline"):
             self.pipeline.set_params(**params)
-            logger.info(f"Pipeline for {model} ParamGrid params: {self.pipeline.get_params()}\n")
+            logger.info(f"Pipeline for {model} ParamGrid params: \n{self.pipeline.get_params()}\n")
             self.pipeline.fit(x_train, y_train)
             y_pred = self.pipeline.predict(x_val)
             y_pred_raw = self.pipeline.decision_function(x_val)
 
+            logger.info(f"Evaluating {model} results...")
             # all_metrics cannot take sparse, y_pred may be sparse if y_train is sparse
             y_pred = sparse_to_array(y_pred)
             y_pred_raw = sparse_to_array(y_pred_raw)
 
             self.eval_metrics.append(all_metrics(y_pred, y_val, k=[1, 3, 5], yhat_raw=y_pred_raw, calc_auc=True))
             tfidf_score = simple_score(y_pred, y_val, model)
+
+            logger.info(f"{model} score: \n{tfidf_score.head()}\n")
             self.eval_scores = pd.concat([self.eval_scores, tfidf_score])
+
+        logger.info(f"Finished executing sklearn tfidf pipeline for: LogisticRegression (opt), "
+                    f"SGDClassifier, and LinearSVC...\n")
 
     def execute_stack_pipeline(self, x_train, y_train, x_val, y_val):
         logger.info(f"Executing sklearn tfidf pipeline for stacked classifier")
-        logger.info(f"Stack pipeline params: {self.stack_pipeline.get_params()}")
+        logger.info(f"Stack pipeline params: \n{self.stack_pipeline.get_params()}\n")
 
         # all_metrics cannot take sparse
         y_val = sparse_to_array(y_val)

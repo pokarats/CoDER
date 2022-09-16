@@ -8,7 +8,7 @@ NUM_CPUS=32
 MEM_PER_CPU=16GB
 
 # variables for srun and python
-vers=50
+vers=full
 mimic3_dir=$MYDATA/linked_data/"$vers"
 split=test
 cache=/netscratch/pokarats/cache/scispacy
@@ -18,7 +18,7 @@ srun -K -p RTXA6000-MLT \
   --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
   --container-workdir="$(pwd)" \
   --container-image=$IMAGE \
-  --job-name=tfidf_"$vers"_extra_stacked \
+  --job-name=tfidf_"$vers"_skip \
   --cpus-per-task=$NUM_CPUS \
   --mem-per-cpu=$MEM_PER_CPU \
   --nodes=1 \
@@ -30,8 +30,7 @@ python src/baseline_exp.py \
   --version $vers \
   --split $split \
   --model tfidf \
-  --extra \
-  --stacked \
+  --skip_logreg \
   --cache_dir $cache \
   --misc_pickle_file "$pickle_file".pickle \
   --add_name tfidf \
