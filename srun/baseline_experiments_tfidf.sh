@@ -5,7 +5,7 @@ export SCISPACY_CACHE=/netscratch/pokarats/cache/scispacy
 MYDATA=/netscratch/pokarats/ds
 IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_base1.sqsh
 NUM_CPUS=8
-MEM_PER_CPU=16GB
+MEM_PER_CPU=32GB
 
 # variables for srun and python
 for vers in 50 full
@@ -31,8 +31,6 @@ do
     --split $split \
     --model tfidf \
     --stacked True \
-    --extra True \
-    --skip_logreg True \
     --cache_dir $cache \
     --misc_pickle_file "$pickle_file".pickle \
     --add_name tfidf \
