@@ -92,7 +92,8 @@ class PrepareData:
             self.cuis_to_discard = pickle.load(handle)
 
     def init_mlbinarizer(self, labels=None):
-        self.mlbinarizer = MultiLabelBinarizer(classes=tuple(self.all_icd9) if not labels else tuple(labels))
+        self.mlbinarizer = MultiLabelBinarizer(classes=tuple(self.all_icd9) if not labels else tuple(labels),
+                                               sparse_output=True)
 
     def get_partition_data(self, partition, version, pruning_file="50_cuis_to_discard.pickle"):
         corpus_reader = ConceptCorpusReader(self.linked_data_dir, partition, version)
@@ -150,6 +151,13 @@ class PrepareData:
         return self.dataset_raw_labels[name]
 
     def get_binarized_labels(self, partition):
+        """
+
+        :param partition: name of the partition whose labels to be binarized
+        :type partition: str
+        :return: binarized labels for the partition
+        :rtype: csr sparse matrix for binarized labels or array if binarizer initialized with sparse_output = False
+        """
         if not self.mlbinarizer:
             raise AttributeError(f"MLBinarizer has NOT been initialized!!!")
         if not self.dataset_raw_labels:

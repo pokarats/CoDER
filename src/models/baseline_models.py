@@ -175,9 +175,13 @@ class TFIDFBasedClassifier:
         self.eval_metrics = []
 
     def execute_pipeline(self, x_train, y_train, x_val, y_val):
-        logger.info(f"Executing sklearn tfidf pipeline for (LogisticRegression), SGDClassifier, and LinearSVC...")
+        logger.info(f"Executing sklearn tfidf pipeline for: LogisticRegression (opt), SGDClassifier, and LinearSVC...")
+        logger.info(f"TFIDFBasedClassifier initialized with these SPECIFIED attributes:"
+                    f"loss: {self.loss}, solver: {self.solver}, class_weight: {self.class_weight}"
+                    f"models {self.models}")
         for model, params in tqdm(zip(self.models, self.grid), total=len(self.models), desc=f"training pipeline"):
             self.pipeline.set_params(**params)
+            logger.info(f"{self.pipeline.get_params()}")
             self.pipeline.fit(x_train, y_train)
             y_pred = self.pipeline.predict(x_val)
             y_pred_raw = self.pipeline.decision_function(x_val)

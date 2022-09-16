@@ -93,15 +93,15 @@ def main(cl_args):
 
         binarized_labels[cl_args.add_name] = prep.get_binarized_labels(cl_args.add_name)
 
-        assert len(binarized_labels['test']) == len(binarized_labels[cl_args.add_name])
-        assert len(binarized_labels['train'] == len(dataset_cuis['train']))
+        assert binarized_labels['test'].shape[0] == binarized_labels[cl_args.add_name].shape[0]
+        assert binarized_labels['train'].shape[0] == len(dataset_cuis['train'])
 
         logger.info(f"Sample from train data: \n{dataset_cuis['train'][:3]}")
 
 
         logger.info(f"\n==========START EVAL ON RULE-BASED MODEL==============\n")
-        metrics = all_metrics(binarized_labels[cl_args.add_name],
-                              binarized_labels[cl_args.split],
+        metrics = all_metrics(binarized_labels[cl_args.add_name].todense(),
+                              binarized_labels[cl_args.split].todense(),
                               k=[1, 3, 5],
                               yhat_raw=None,
                               calc_auc=False)
@@ -131,7 +131,7 @@ def main(cl_args):
         for split in partitions:
             binarized_labels[split] = prep.get_binarized_labels(split)
             dataset_cuis[split] = prep.get_partition_data(split, cl_args.version, cl_args.misc_pickle_file)
-            assert len(binarized_labels[split] == len(dataset_cuis[split]))
+            assert binarized_labels[split].shape[0] == len(dataset_cuis[split])
 
         logger.info(f"Trying LogisticRegresion, SGD, and SVM...")
         tfidf_clf = TFIDFBasedClassifier(cl_args)
