@@ -23,7 +23,6 @@ import traceback
 import pickle
 
 import pandas as pd
-import scipy.sparse.csr
 import spacy
 from operator import itemgetter
 from src.utils.concepts_pruning import ConceptCorpusReader
@@ -103,12 +102,16 @@ class TFIDFBasedClassifier:
             self.class_weight = 'balanced'
             self.regularizer = 1e3
             self.max_iter = 1000
+            self.lr = 'adaptive'
+            self.eta0 = 0.01
         else:
             self.loss = 'hinge'
             self.solver = 'liblinear' if cl_arg.version == '50' else 'sag'
             self.class_weight = None
             self.regularizer = 1e3
             self.max_iter = 1000
+            self.lr = 'adaptive'
+            self.eta0 = 0.01
 
         if cl_arg.version == '50':
             self.stacked_clf = OneVsRestClassifier(
@@ -120,6 +123,8 @@ class TFIDFBasedClassifier:
                                                                    max_iter=self.max_iter)),
                                     ('sgd2', SGDClassifier(class_weight=self.class_weight,
                                                            random_state=self.seed,
+                                                           learning_rate=self.lr,
+                                                           eta0=self.eta0,
                                                            loss=self.loss)),
                                     ('svm2', LinearSVC(class_weight=self.class_weight,
                                                        C=self.regularizer,
@@ -128,6 +133,8 @@ class TFIDFBasedClassifier:
             self.stacked_clf = OneVsRestClassifier(
                 StackingClassifier([('sgd2', SGDClassifier(class_weight=self.class_weight,
                                                            random_state=self.seed,
+                                                           learning_rate=self.lr,
+                                                           eta0=self.eta0,
                                                            loss=self.loss)),
                                     ('svm2', LinearSVC(class_weight=self.class_weight,
                                                        C=self.regularizer,
@@ -148,6 +155,8 @@ class TFIDFBasedClassifier:
             self.grid = ParameterGrid({'clf__estimator': (
                 OneVsRestClassifier(SGDClassifier(class_weight=self.class_weight,
                                                   random_state=self.seed,
+                                                  learning_rate=self.lr,
+                                                  eta0=self.eta0,
                                                   loss=self.loss), n_jobs=-1),
                 OneVsRestClassifier(LinearSVC(class_weight=self.class_weight,
                                               C=self.regularizer,
@@ -167,8 +176,11 @@ class TFIDFBasedClassifier:
                                                        max_iter=self.max_iter), n_jobs=-1),
                 OneVsRestClassifier(SGDClassifier(class_weight=self.class_weight,
                                                   random_state=self.seed,
+                                                  learning_rate=self.lr,
+                                                  eta0=self.eta0,
                                                   loss=self.loss), n_jobs=-1),
                 OneVsRestClassifier(LinearSVC(class_weight=self.class_weight,
+                                              C=self.regularizer,
                                               random_state=self.seed), n_jobs=-1)),
                 'tfidf__ngram_range': ((1, 1), (1, 2)),
                 'tfidf__analyzer': ('word',),
@@ -202,7 +214,7 @@ class TFIDFBasedClassifier:
                     f"SGDClassifier, and LinearSVC...\n")
         logger.info(f"TFIDFBasedClassifier initialized with these SPECIFIED attributes:\n"
                     f"loss: {self.loss}, solver: {self.solver}, class_weight: {self.class_weight}, "
-                    f"C= {self.regularizer}\n"
+                    f"C= {self.regularizer}, max_iter: {self.max_iter}, lr: {self.lr}, eta0: {self.eta0}\n"
                     f"models {self.models}\n")
 
         # all_metrics cannot take sparse
