@@ -18,7 +18,7 @@ srun -K -p RTXA6000-MLT \
   --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
   --container-workdir="$(pwd)" \
   --container-image=$IMAGE \
-  --job-name=tfidf_"$vers"_skip \
+  --job-name=tfidf_"$vers"_extra_skip \
   --cpus-per-task=$NUM_CPUS \
   --mem-per-cpu=$MEM_PER_CPU \
   --nodes=1 \
@@ -30,9 +30,10 @@ python src/baseline_exp.py \
   --version $vers \
   --split $split \
   --model tfidf \
+  --extra \
   --skip_logreg \
   --cache_dir $cache \
   --misc_pickle_file "$pickle_file".pickle \
-  --add_name tfidf \
+  --add_name tfidf_extra_skip \
   --filename "$vers"_cuis_to_discard_None \
   --n_process $NUM_CPUS

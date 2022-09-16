@@ -35,6 +35,6 @@ python src/baseline_exp.py \
   --stacked \
   --cache_dir $cache \
   --misc_pickle_file "$pickle_file".pickle \
-  --add_name tfidf \
+  --add_name tfidf_extra \
   --filename "$vers"_cuis_to_discard_None \
   --n_process $NUM_CPUS
