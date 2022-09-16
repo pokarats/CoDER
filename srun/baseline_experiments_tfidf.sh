@@ -4,8 +4,8 @@
 export SCISPACY_CACHE=/netscratch/pokarats/cache/scispacy
 MYDATA=/netscratch/pokarats/ds
 IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_base1.sqsh
-NUM_CPUS=8
-MEM_PER_CPU=32GB
+NUM_CPUS=32
+MEM_PER_CPU=16GB
 
 # variables for srun and python
 for vers in 50 full
@@ -19,6 +19,7 @@ do
     --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
     --container-workdir="$(pwd)" \
     --container-image=$IMAGE \
+    --job-name=tfidf_"$vers"_extra_false
     --cpus-per-task=$NUM_CPUS \
     --mem-per-cpu=$MEM_PER_CPU \
     --nodes=1 \
@@ -30,11 +31,12 @@ do
     --version $vers \
     --split $split \
     --model tfidf \
+    --skip_logreg False \
     --stacked True \
     --cache_dir $cache \
     --misc_pickle_file "$pickle_file".pickle \
     --add_name tfidf \
     --filename "$vers"_cuis_to_discard_None \
     --n_process $NUM_CPUS
-  sleep 1
+  sleep 2
 done

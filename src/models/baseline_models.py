@@ -23,6 +23,7 @@ import traceback
 import pickle
 
 import pandas as pd
+import scipy.sparse.csr
 import spacy
 from operator import itemgetter
 from src.utils.concepts_pruning import ConceptCorpusReader
@@ -35,7 +36,6 @@ from tqdm import tqdm
 from sklearn.base import BaseEstimator
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn.multioutput import MultiOutputClassifier
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.svm import LinearSVC
 from sklearn.ensemble import StackingClassifier
@@ -57,9 +57,6 @@ input: vectorized concepts found in each doc -->tfidf input features
 linear classifier output to |unique labels in semantic_types_mimic|
 output: labels
 
-label cluster (optional add to baseline) by
-1) semantic types
-2)
 """
 
 logger = logging.getLogger(__name__)
@@ -102,29 +99,40 @@ class TFIDFBasedClassifier:
         self.seed = cl_arg.seed
         if cl_arg.extra:
             self.loss = 'modified_huber'
-            self.solver = 'lbfgs'
+            self.solver = 'lbfgs' if cl_arg.version == '50' else 'sag'
             self.class_weight = 'balanced'
+            self.regularizer = 1e3
+            self.max_iter = 1000
         else:
             self.loss = 'hinge'
-            self.solver = 'liblinear'
+            self.solver = 'liblinear' if cl_arg.version == '50' else 'sag'
             self.class_weight = None
+            self.regularizer = 1e3
+            self.max_iter = 1000
 
         if cl_arg.version == '50':
             self.stacked_clf = OneVsRestClassifier(
                 StackingClassifier([('logreg2', LogisticRegression(class_weight=self.class_weight,
+                                                                   dual=True,
+                                                                   C=self.regularizer,
                                                                    random_state=self.seed,
-                                                                   solver=self.solver)),
+                                                                   solver=self.solver,
+                                                                   max_iter=self.max_iter)),
                                     ('sgd2', SGDClassifier(class_weight=self.class_weight,
                                                            random_state=self.seed,
+                                                           early_stopping=True,
                                                            loss=self.loss)),
                                     ('svm2', LinearSVC(class_weight=self.class_weight,
+                                                       C=self.regularizer,
                                                        random_state=self.seed))]), n_jobs=-1)
         elif cl_arg.version == 'full':
             self.stacked_clf = OneVsRestClassifier(
                 StackingClassifier([('sgd2', SGDClassifier(class_weight=self.class_weight,
                                                            random_state=self.seed,
+                                                           early_stopping=True,
                                                            loss=self.loss)),
                                     ('svm2', LinearSVC(class_weight=self.class_weight,
+                                                       C=self.regularizer,
                                                        random_state=self.seed))]), n_jobs=-1)
         else:
             raise ValueError(f"{cl_arg.version} is an invalid option!!!")
@@ -142,8 +150,10 @@ class TFIDFBasedClassifier:
             self.grid = ParameterGrid({'clf__estimator': (
                 OneVsRestClassifier(SGDClassifier(class_weight=self.class_weight,
                                                   random_state=self.seed,
+                                                  early_stopping=True,
                                                   loss=self.loss), n_jobs=-1),
                 OneVsRestClassifier(LinearSVC(class_weight=self.class_weight,
+                                              C=self.regularizer,
                                               random_state=self.seed), n_jobs=-1)),
                 'tfidf__ngram_range': ((1, 1), (1, 2)),
                 'tfidf__analyzer': ('word',),
@@ -153,10 +163,14 @@ class TFIDFBasedClassifier:
         else:
             self.grid = ParameterGrid({'clf__estimator': (
                 OneVsRestClassifier(LogisticRegression(class_weight=self.class_weight,
+                                                       dual=True,
+                                                       C=self.regularizer,
                                                        random_state=self.seed,
-                                                       solver=self.solver), n_jobs=-1),
+                                                       solver=self.solver,
+                                                       max_iter=self.max_iter), n_jobs=-1),
                 OneVsRestClassifier(SGDClassifier(class_weight=self.class_weight,
                                                   random_state=self.seed,
+                                                  early_stopping=True,
                                                   loss=self.loss), n_jobs=-1),
                 OneVsRestClassifier(LinearSVC(class_weight=self.class_weight,
                                               random_state=self.seed), n_jobs=-1)),
@@ -175,26 +189,51 @@ class TFIDFBasedClassifier:
         self.eval_metrics = []
 
     def execute_pipeline(self, x_train, y_train, x_val, y_val):
-        logger.info(f"Executing sklearn tfidf pipeline for: LogisticRegression (opt), SGDClassifier, and LinearSVC...")
-        logger.info(f"TFIDFBasedClassifier initialized with these SPECIFIED attributes:"
-                    f"loss: {self.loss}, solver: {self.solver}, class_weight: {self.class_weight}"
-                    f"models {self.models}")
+        """
+
+        :param x_train: training data
+        :type x_train: array or csr
+        :param y_train: training labels
+        :type y_train: arary or csr
+        :param x_val: testing data
+        :type x_val: array or csr
+        :param y_val: testing labels
+        :type y_val: array or csr
+        :return: None
+        """
+
+        logger.info(f"Executing sklearn tfidf pipeline for: LogisticRegression (opt), "
+                    f"SGDClassifier, and LinearSVC...\n")
+        logger.info(f"TFIDFBasedClassifier initialized with these SPECIFIED attributes:\n"
+                    f"loss: {self.loss}, solver: {self.solver}, class_weight: {self.class_weight}, "
+                    f"C= {self.regularizer}\n"
+                    f"models {self.models}\n")
         for model, params in tqdm(zip(self.models, self.grid), total=len(self.models), desc=f"training pipeline"):
             self.pipeline.set_params(**params)
-            logger.info(f"{self.pipeline.get_params()}")
+            logger.info(f"Pipeline for {model} ParamGrid params: {self.pipeline.get_params()}\n")
             self.pipeline.fit(x_train, y_train)
             y_pred = self.pipeline.predict(x_val)
             y_pred_raw = self.pipeline.decision_function(x_val)
+
+            # estimator outputs are arrays, NOT csr sparse
+            if isinstance(y_val, scipy.sparse.csr.csr_matrix):
+                y_val = y_val.todense()
+
             self.eval_metrics.append(all_metrics(y_pred, y_val, k=[1, 3, 5], yhat_raw=y_pred_raw, calc_auc=True))
             tfidf_score = simple_score(y_pred, y_val, model)
             self.eval_scores = pd.concat([self.eval_scores, tfidf_score])
 
     def execute_stack_pipeline(self, x_train, y_train, x_val, y_val):
         logger.info(f"Executing sklearn tfidf pipeline for stacked classifier")
+        logger.info(f"Stack pipeline params: {self.stack_pipeline.get_params()}")
         self.stack_pipeline.fit(x_train, y_train)
         stack_pred = self.stack_pipeline.predict(x_val)
         stack_pred_raw = self.stack_pipeline.decision_function(x_val)
+
         logger.info(f"Evaluating stack model results...")
+        # estimator outputs are arrays, NOT csr sparse
+        if isinstance(y_val, scipy.sparse.csr.csr_matrix):
+            y_val = y_val.todense()
         self.eval_metrics.append(all_metrics(stack_pred, y_val, k=[1, 3, 5], yhat_raw=stack_pred_raw, calc_auc=True))
         stack_model_score = simple_score(stack_pred, y_val, 'stack_model')
         self.eval_scores = pd.concat([self.eval_scores, stack_model_score])
@@ -206,13 +245,16 @@ class RuleBasedClassifier:
     """
 
     def __init__(self, cl_arg, version, prune_icd9=True, extension=None):
-
         """
 
-        :param mimic3_dir: directory where mimic3 data files are
-        :param split: dev, test, or train partition
-        :param version: full vs 50
-        :param threshold: confidence level threshold to include concept
+        :param cl_arg:
+        :type cl_arg:
+        :param version:
+        :type version:
+        :param prune_icd9:
+        :type prune_icd9:
+        :param extension:
+        :type extension:
         """
 
         self.data_dir = Path(cl_arg.data_dir)
@@ -391,7 +433,8 @@ class RuleBasedClassifier:
         pred_icd9_labels = set()
         pred_icd9_labels.update({self.cui_to_icd9.get(cui) for cui in pruned_input_cuis if self.cui_to_icd9.get(cui)
                                  is not None})
-        pred_icd9_labels.update({element for cui in pruned_input_cuis for element in self.cui_to_icd9_collision.get(cui, set())
+        pred_icd9_labels.update({element for cui in pruned_input_cuis for element in
+                                 self.cui_to_icd9_collision.get(cui, set())
                                  if self.cui_to_icd9_collision.get(cui)})
 
         if self.extension and len(pred_icd9_labels) < self.min_num_labels:
