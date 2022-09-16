@@ -98,8 +98,8 @@ def main(cl_args):
 
 
         logger.info(f"\n==========START EVAL ON RULE-BASED MODEL==============\n")
-        metrics = all_metrics(binarized_labels[cl_args.add_name].todense(),
-                              binarized_labels[cl_args.split].todense(),
+        metrics = all_metrics(binarized_labels[cl_args.add_name].toarray(),
+                              binarized_labels[cl_args.split].toarray(),
                               k=[1, 3, 5],
                               yhat_raw=None,
                               calc_auc=False)

@@ -217,7 +217,7 @@ class TFIDFBasedClassifier:
 
             # estimator outputs are arrays, NOT csr sparse
             if isinstance(y_val, scipy.sparse.csr.csr_matrix):
-                y_val = y_val.todense()
+                y_val = y_val.toarray()
 
             self.eval_metrics.append(all_metrics(y_pred, y_val, k=[1, 3, 5], yhat_raw=y_pred_raw, calc_auc=True))
             tfidf_score = simple_score(y_pred, y_val, model)
@@ -233,7 +233,7 @@ class TFIDFBasedClassifier:
         logger.info(f"Evaluating stack model results...")
         # estimator outputs are arrays, NOT csr sparse
         if isinstance(y_val, scipy.sparse.csr.csr_matrix):
-            y_val = y_val.todense()
+            y_val = y_val.toarray()
         self.eval_metrics.append(all_metrics(stack_pred, y_val, k=[1, 3, 5], yhat_raw=stack_pred_raw, calc_auc=True))
         stack_model_score = simple_score(stack_pred, y_val, 'stack_model')
         self.eval_scores = pd.concat([self.eval_scores, stack_model_score])
