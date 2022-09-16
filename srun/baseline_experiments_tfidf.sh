@@ -23,7 +23,7 @@ do
     --cpus-per-task=$NUM_CPUS \
     --mem-per-cpu=$MEM_PER_CPU \
     --nodes=1 \
-    --mail-type=END \
+    --mail-type=END,FAIL \
     --mail-user=noon.pokaratsiri@dfki.de \
   python src/baseline_exp.py \
     --data_dir $MYDATA \

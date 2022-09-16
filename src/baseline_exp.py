@@ -25,8 +25,6 @@ import traceback
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
-import numpy as np
-import json
 
 if platform.system() != 'Darwin':
     sys.path.append(os.getcwd())  # only needed for slurm
@@ -44,6 +42,9 @@ def main(cl_args):
     start_time = time.time()
 
     logger.info(f"\n==========START BASELINE EXP==============\n")
+
+    data_folder = Path(cl_args.mimic3_dir)
+    result_file = data_folder / f"{cl_args.version}_{cl_args.result_filename}_{cl_args.extension}.json"
 
     if cl_args.model == "rule-based":
         logger.info(f"\n==========START RULE-BASED MODEL==============\n")
@@ -68,13 +69,10 @@ def main(cl_args):
         for idx in sample_results_idx:
             logger.info(f"sample idx {idx} results: \n {results[idx]}")
 
-    data_folder = Path(cl_args.mimic3_dir)
-    result_file = data_folder / f"{cl_args.version}_{cl_args.result_filename}_{cl_args.extension}.json"
-
-    if cl_args.model == "rule-based":
+        logger.info(f"\n==========FINISHED RULE-BASED MODEL==============\n")
         write_to_json(results, result_file)
 
-        logger.info(f"\n==========START DATA PREP FOR RULE-BASED MODEL==============\n")
+        logger.info(f"\n==========START DATA PREP FOR RULE-BASED MODEL EVAL==============\n")
         logger.info(f"Preparing data for baseline and/or eval...")
         prep = PrepareData(cl_args)
         partitions = ['test', 'dev', 'train']
@@ -96,7 +94,7 @@ def main(cl_args):
         assert binarized_labels['test'].shape[0] == binarized_labels[cl_args.add_name].shape[0]
         assert binarized_labels['train'].shape[0] == len(dataset_cuis['train'])
 
-        logger.info(f"Sample from train data: \n{dataset_cuis['train'][:3]}")
+        logger.info(f"Samples from train data: \n{dataset_cuis['train'][:3]}")
 
 
         logger.info(f"\n==========START EVAL ON RULE-BASED MODEL==============\n")
@@ -116,7 +114,7 @@ def main(cl_args):
 
     if cl_args.model == 'tfidf':
         logger.info(f"\n==========START TFIDF MODELS PIPELINES==============\n")
-        logger.info(f"Re-binarize labels for train, test, val without rule-based labels...")
+        logger.info(f"Binarize labels for train, test, val without rule-based labels...")
 
         prep = PrepareData(cl_args)
         partitions = ['test', 'dev', 'train']
@@ -260,7 +258,7 @@ if __name__ == '__main__':
     basename = Path(__file__).stem
     proj_folder = Path(__file__).resolve().parent.parent
     log_folder = proj_folder / f"scratch/.log/{date.today():%y_%m_%d}"
-    log_file = log_folder / f"{time.strftime('%Hh%Mm%Ss')}_{basename}.log"
+    log_file = log_folder / f"{time.strftime('%Hh%Mm%Ss')}_{basename}_{args.add_name}_{args.version}.log"
 
     if not log_folder.exists():
         log_folder.mkdir(parents=True, exist_ok=False)
