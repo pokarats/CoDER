@@ -16,10 +16,10 @@ do
   pickle_file="$vers"_cuis_to_discard
 
   srun -K -p RTXA6000-MLT \
-    --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
+    --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
     --container-workdir="$(pwd)" \
     --container-image=$IMAGE \
-    --job-name=tfidf_"$vers"_extra_false
+    --job-name=tfidf_"$vers"_extra_false \
     --cpus-per-task=$NUM_CPUS \
     --mem-per-cpu=$MEM_PER_CPU \
     --nodes=1 \

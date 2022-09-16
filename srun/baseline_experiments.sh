@@ -18,10 +18,10 @@ do
   echo "Submitting version: $vers"
 
   srun -K -p RTX3090-MLT \
-    --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
+    --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
     --container-workdir="$(pwd)" \
     --container-image=$IMAGE \
-    --job-name=rule_based_"$vers"
+    --job-name=rule_based_"$vers" \
     --cpus-per-task=$NUM_CPUS \
     --mem-per-cpu=$MEM_PER_CPU \
     --nodes=1 \
@@ -47,10 +47,10 @@ do
     echo "Submitting version: $vers and extension option: $ext"
 
     srun -K -p RTX3090-MLT \
-      --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
+      --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
       --container-workdir="$(pwd)" \
       --container-image=$IMAGE \
-      --job-name=rule_based_"$vers"_"$ext"
+      --job-name=rule_based_"$vers"_"$ext" \
       --cpus-per-task=$NUM_CPUS \
       --mem-per-cpu=$MEM_PER_CPU \
       --nodes=1 \
