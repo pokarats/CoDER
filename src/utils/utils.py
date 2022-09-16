@@ -18,6 +18,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 from datetime import date
+import scipy
 
 
 logger = logging.getLogger(__name__)
@@ -178,3 +179,17 @@ def token_to_token(token):
     :rtype:
     """
     return token
+
+
+def sparse_to_array(array_like_obj):
+    """
+
+    :param array_like_obj: array or sparse
+    :type array_like_obj: csr or ndarray
+    :return: ndarray of the sparse or itself unchanged if already an ndarray
+    :rtype: ndarray
+    """
+    if isinstance(array_like_obj, scipy.sparse.csr_matrix):
+        return array_like_obj.toarray()
+    else:
+        return array_like_obj

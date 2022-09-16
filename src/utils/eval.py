@@ -25,7 +25,7 @@ from sklearn.metrics import roc_curve, auc, precision_recall_fscore_support
 logger = logging.getLogger(__file__)
 
 
-def simple_score(yhat, y, index):
+def simple_score(yhat, y, index, metrics_average='weighted'):
     """
     Calculate simple precision, recall, and f1 score from sklearn
 
@@ -35,13 +35,15 @@ def simple_score(yhat, y, index):
     :type y: iterable of binarized labels
     :param index: this will be pd DataFrame index column
     :type index: str
+    :param metrics_average: average param for precision, recall, fscore weighted, micro, macro
+    :type metrics_average: str
     :return:
 
     """
 
-    metrics = precision_recall_fscore_support(y, yhat, average='weighted')
+    metrics = precision_recall_fscore_support(y, yhat, average=metrics_average, zero_division=0)
     performance = {'precision': metrics[0], 'recall': metrics[1], 'f1': metrics[2]}
-    return pd.DataFrame(performance, index=[index])
+    return pd.DataFrame(performance, index=[f"{index}_{metrics_average}"])
 
 
 def union_size(yhat, y, axis):

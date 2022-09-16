@@ -27,7 +27,7 @@ import scipy.sparse.csr
 import spacy
 from operator import itemgetter
 from src.utils.concepts_pruning import ConceptCorpusReader
-from src.utils.utils import token_to_token, get_dataset_icd9_codes
+from src.utils.utils import token_to_token, get_dataset_icd9_codes, sparse_to_array
 from src.utils.eval import simple_score, all_metrics
 from scispacy.umls_linking import UmlsEntityLinker
 from pathlib import Path
@@ -120,7 +120,6 @@ class TFIDFBasedClassifier:
                                                                    max_iter=self.max_iter)),
                                     ('sgd2', SGDClassifier(class_weight=self.class_weight,
                                                            random_state=self.seed,
-                                                           early_stopping=True,
                                                            loss=self.loss)),
                                     ('svm2', LinearSVC(class_weight=self.class_weight,
                                                        C=self.regularizer,
@@ -129,7 +128,6 @@ class TFIDFBasedClassifier:
             self.stacked_clf = OneVsRestClassifier(
                 StackingClassifier([('sgd2', SGDClassifier(class_weight=self.class_weight,
                                                            random_state=self.seed,
-                                                           early_stopping=True,
                                                            loss=self.loss)),
                                     ('svm2', LinearSVC(class_weight=self.class_weight,
                                                        C=self.regularizer,
@@ -150,7 +148,6 @@ class TFIDFBasedClassifier:
             self.grid = ParameterGrid({'clf__estimator': (
                 OneVsRestClassifier(SGDClassifier(class_weight=self.class_weight,
                                                   random_state=self.seed,
-                                                  early_stopping=True,
                                                   loss=self.loss), n_jobs=-1),
                 OneVsRestClassifier(LinearSVC(class_weight=self.class_weight,
                                               C=self.regularizer,
@@ -170,7 +167,6 @@ class TFIDFBasedClassifier:
                                                        max_iter=self.max_iter), n_jobs=-1),
                 OneVsRestClassifier(SGDClassifier(class_weight=self.class_weight,
                                                   random_state=self.seed,
-                                                  early_stopping=True,
                                                   loss=self.loss), n_jobs=-1),
                 OneVsRestClassifier(LinearSVC(class_weight=self.class_weight,
                                               random_state=self.seed), n_jobs=-1)),
@@ -208,6 +204,10 @@ class TFIDFBasedClassifier:
                     f"loss: {self.loss}, solver: {self.solver}, class_weight: {self.class_weight}, "
                     f"C= {self.regularizer}\n"
                     f"models {self.models}\n")
+
+        # all_metrics cannot take sparse
+        y_val = sparse_to_array(y_val)
+
         for model, params in tqdm(zip(self.models, self.grid), total=len(self.models), desc=f"training pipeline"):
             self.pipeline.set_params(**params)
             logger.info(f"Pipeline for {model} ParamGrid params: {self.pipeline.get_params()}\n")
@@ -215,9 +215,9 @@ class TFIDFBasedClassifier:
             y_pred = self.pipeline.predict(x_val)
             y_pred_raw = self.pipeline.decision_function(x_val)
 
-            # estimator outputs are arrays, NOT csr sparse
-            if isinstance(y_val, scipy.sparse.csr.csr_matrix):
-                y_val = y_val.toarray()
+            # all_metrics cannot take sparse, y_pred may be sparse if y_train is sparse
+            y_pred = sparse_to_array(y_pred)
+            y_pred_raw = sparse_to_array(y_pred_raw)
 
             self.eval_metrics.append(all_metrics(y_pred, y_val, k=[1, 3, 5], yhat_raw=y_pred_raw, calc_auc=True))
             tfidf_score = simple_score(y_pred, y_val, model)
@@ -226,14 +226,19 @@ class TFIDFBasedClassifier:
     def execute_stack_pipeline(self, x_train, y_train, x_val, y_val):
         logger.info(f"Executing sklearn tfidf pipeline for stacked classifier")
         logger.info(f"Stack pipeline params: {self.stack_pipeline.get_params()}")
+
+        # all_metrics cannot take sparse
+        y_val = sparse_to_array(y_val)
+
         self.stack_pipeline.fit(x_train, y_train)
         stack_pred = self.stack_pipeline.predict(x_val)
         stack_pred_raw = self.stack_pipeline.decision_function(x_val)
 
         logger.info(f"Evaluating stack model results...")
-        # estimator outputs are arrays, NOT csr sparse
-        if isinstance(y_val, scipy.sparse.csr.csr_matrix):
-            y_val = y_val.toarray()
+        # all_metrics cannot take sparse, y_pred may be sparse if y_train is sparse
+        stack_pred = sparse_to_array(stack_pred)
+        stack_pred_raw = sparse_to_array(stack_pred_raw)
+
         self.eval_metrics.append(all_metrics(stack_pred, y_val, k=[1, 3, 5], yhat_raw=stack_pred_raw, calc_auc=True))
         stack_model_score = simple_score(stack_pred, y_val, 'stack_model')
         self.eval_scores = pd.concat([self.eval_scores, stack_model_score])
