@@ -15,7 +15,7 @@ do
   cache=/netscratch/pokarats/cache/scispacy
   pickle_file="$vers"_cuis_to_discard
 
-  srun -K -p RTX3090-MLT \
+  srun -K -p RTXA6000-MLT \
     --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)"\
     --container-workdir="$(pwd)" \
     --container-image=$IMAGE \
