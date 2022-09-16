@@ -19,7 +19,7 @@ do
     --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
     --container-workdir="$(pwd)" \
     --container-image=$IMAGE \
-    --job-name=tfidf_"$vers"_extra \
+    --job-name=tfidf_"$vers"_extra_skip \
     --cpus-per-task=$NUM_CPUS \
     --mem-per-cpu=$MEM_PER_CPU \
     --nodes=1 \
@@ -31,8 +31,6 @@ do
     --version $vers \
     --split $split \
     --model tfidf \
-    --extra True \
-    --skip_logreg False \
     --stacked True \
     --cache_dir $cache \
     --misc_pickle_file "$pickle_file".pickle \
