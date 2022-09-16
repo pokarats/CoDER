@@ -128,6 +128,7 @@ class TFIDFBasedClassifier:
                                                        random_state=self.seed))]), n_jobs=-1)
         else:
             raise ValueError(f"{cl_arg.version} is an invalid option!!!")
+
         self.pipeline = Pipeline([('tfidf', TfidfVectorizer()),
                                   ('clf', ClfSwitcher())])
         self.stack_pipeline = Pipeline([('tfidf', TfidfVectorizer(analyzer='word',
@@ -136,27 +137,45 @@ class TFIDFBasedClassifier:
                                                                   ngram_range=(1, 2),
                                                                   token_pattern=None)),
                                         ('stack', self.stacked_clf)])
-        self.grid = ParameterGrid({'clf__estimator': (
-            OneVsRestClassifier(LogisticRegression(class_weight=self.class_weight,
-                                                   random_state=self.seed,
-                                                   solver=self.solver), n_jobs=-1),
-            OneVsRestClassifier(SGDClassifier(class_weight=self.class_weight,
-                                              random_state=self.seed,
-                                              loss=self.loss), n_jobs=-1),
-            OneVsRestClassifier(LinearSVC(class_weight=self.class_weight,
-                                          random_state=self.seed), n_jobs=-1)),
-            'tfidf__ngram_range': ((1, 1), (1, 2)),
-            'tfidf__analyzer': ('word',),
-            'tfidf__tokenizer': (token_to_token,),
-            'tfidf__preprocessor': (token_to_token,),
-            'tfidf__token_pattern': (None,)})
-        self.models = ['logreg_n1', 'logreg_n2', 'sgd_n1', 'sgd_n2',
-                       'svm_n1', 'svm_n2']
+
+        if cl_arg.version == 'full' and cl_arg.skip_logreg:
+            self.grid = ParameterGrid({'clf__estimator': (
+                OneVsRestClassifier(SGDClassifier(class_weight=self.class_weight,
+                                                  random_state=self.seed,
+                                                  loss=self.loss), n_jobs=-1),
+                OneVsRestClassifier(LinearSVC(class_weight=self.class_weight,
+                                              random_state=self.seed), n_jobs=-1)),
+                'tfidf__ngram_range': ((1, 1), (1, 2)),
+                'tfidf__analyzer': ('word',),
+                'tfidf__tokenizer': (token_to_token,),
+                'tfidf__preprocessor': (token_to_token,),
+                'tfidf__token_pattern': (None,)})
+        else:
+            self.grid = ParameterGrid({'clf__estimator': (
+                OneVsRestClassifier(LogisticRegression(class_weight=self.class_weight,
+                                                       random_state=self.seed,
+                                                       solver=self.solver), n_jobs=-1),
+                OneVsRestClassifier(SGDClassifier(class_weight=self.class_weight,
+                                                  random_state=self.seed,
+                                                  loss=self.loss), n_jobs=-1),
+                OneVsRestClassifier(LinearSVC(class_weight=self.class_weight,
+                                              random_state=self.seed), n_jobs=-1)),
+                'tfidf__ngram_range': ((1, 1), (1, 2)),
+                'tfidf__analyzer': ('word',),
+                'tfidf__tokenizer': (token_to_token,),
+                'tfidf__preprocessor': (token_to_token,),
+                'tfidf__token_pattern': (None,)})
+
+        if cl_arg.version == 'full' and cl_arg.skip_logreg:
+            self.models = ['sgd_1', 'sgd_2', 'svm_1', 'svm_2']
+        else:
+            self.models = ['logreg_1', 'logreg_2', 'sgd_1', 'sgd_2', 'svm_1', 'svm_2']
+
         self.eval_scores = pd.DataFrame()
         self.eval_metrics = []
 
     def execute_pipeline(self, x_train, y_train, x_val, y_val):
-        logger.info(f"Executing sklearn tfidf pipeline for LogisticRegression, SGDClassifier, and LinearSVC...")
+        logger.info(f"Executing sklearn tfidf pipeline for (LogisticRegression), SGDClassifier, and LinearSVC...")
         for model, params in tqdm(zip(self.models, self.grid), total=len(self.models), desc=f"training pipeline"):
             self.pipeline.set_params(**params)
             self.pipeline.fit(x_train, y_train)

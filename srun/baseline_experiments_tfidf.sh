@@ -31,7 +31,8 @@ do
     --split $split \
     --model tfidf \
     --stacked True \
-    --extra False \
+    --extra True \
+    --skip_logreg True \
     --cache_dir $cache \
     --misc_pickle_file "$pickle_file".pickle \
     --add_name tfidf \

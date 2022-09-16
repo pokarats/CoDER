@@ -294,36 +294,32 @@ def hierarchical_metrics(y, yhat, hierarchy_path, hier_dist=10000, hier_err=5):
 def log_metrics(metrics):
     print()
     if "auc_macro" in metrics.keys():
-        logger.info("[MACRO]\naccuracy\tprecision\trecall\tf-measure\tAUC")
         logger.info(
-            "%.4f\t%.4f\t%.4f\t%.4f\t%.4f" % (
+            "[MACRO]\naccuracy\tprecision\trecall\tf-measure\tAUC\n%.4f\t%.4f\t%.4f\t%.4f\t%.4f" % (
                 metrics["acc_macro"], metrics["prec_macro"], 
                 metrics["rec_macro"], metrics["f1_macro"], 
                 metrics["auc_macro"]
             )
         )
     else:
-        logger.info("[MACRO]\naccuracy\tprecision\trecall\tf-measure")
         logger.info(
-            "%.4f\t%.4f\t%.4f\t%.4f" % (
+            "[MACRO]\naccuracy\tprecision\trecall\tf-measure\n%.4f\t%.4f\t%.4f\t%.4f" % (
                 metrics["acc_macro"], metrics["prec_macro"], 
                 metrics["rec_macro"], metrics["f1_macro"]
             )
         )
     
     if "auc_micro" in metrics.keys():
-        logger.info("[MICRO]\naccuracy\tprecision\trecall\tf-measure\tAUC")
         logger.info(
-            "%.4f\t%.4f\t%.4f\t%.4f\t%.4f" % (
+            "[MICRO]\naccuracy\tprecision\trecall\tf-measure\tAUC\n%.4f\t%.4f\t%.4f\t%.4f\t%.4f" % (
                 metrics["acc_micro"], metrics["prec_micro"], 
                 metrics["rec_micro"], metrics["f1_micro"], 
                 metrics["auc_micro"]
             )
         )
     else:
-        logger.info("[MICRO]\naccuracy\tprecision\trecall\tf-measure")
         logger.info(
-            "%.4f\t%.4f\t%.4f\t%.4f" % (
+            "[MICRO]\naccuracy\tprecision\trecall\tf-measure\n%.4f\t%.4f\t%.4f\t%.4f" % (
                 metrics["acc_micro"], metrics["prec_micro"], 
                 metrics["rec_micro"], metrics["f1_micro"]
             )

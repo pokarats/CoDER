@@ -192,6 +192,10 @@ if __name__ == '__main__':
         help="Whether to run TFIDF Model with extra param options"
     )
     parser.add_argument(
+        "--skip_logreg", action="store", default=True,
+        help="Whether to run TFIDF Model with Logistic Regression or to skip it; True == skip"
+    )
+    parser.add_argument(
         "--extension", action="store", default=None,
         help="Extension type for when cui not matching any icd9, options: best or all"
     )
