@@ -19,7 +19,7 @@ from datetime import date
 import logging
 import argparse
 import traceback
-
+import joblib
 import pickle
 
 import pandas as pd
@@ -59,6 +59,8 @@ output: labels
 """
 
 logger = logging.getLogger(__name__)
+PROJ_FOLDER = Path(__file__).resolve().parent.parent.parent
+SAVED_FOLDER = PROJ_FOLDER / f"scratch/saved_models/{date.today():%y_%m_%d}"
 
 
 class ClfSwitcher(BaseEstimator):
@@ -96,6 +98,7 @@ class ClfSwitcher(BaseEstimator):
 class TFIDFBasedClassifier:
     def __init__(self, cl_arg):
         self.to_skip = cl_arg.to_skip
+        self.desc = f"{cl_arg.add_name}_{cl_arg.version}"
         self.seed = cl_arg.seed
         if cl_arg.extra:
             self.loss = 'modified_huber'
@@ -205,8 +208,8 @@ class TFIDFBasedClassifier:
         :return: None
         """
 
-        logger.info(f"Executing sklearn tfidf pipeline for: LogisticRegression (opt), "
-                    f"SGDClassifier, and LinearSVC...\n")
+        logger.info(f"Executing sklearn tfidf pipeline for: "
+                    f"{[mod for mod in self.models if mod not in self.to_skip]}\n")
         logger.info(f"TFIDFBasedClassifier initialized with these SPECIFIED attributes:\n"
                     f"loss: {self.loss}, solver: {self.solver}, class_weight: {self.class_weight}, "
                     f"C= {self.regularizer}, max_iter: {self.max_iter}, lr: {self.lr}, eta0: {self.eta0}\n"
@@ -214,6 +217,10 @@ class TFIDFBasedClassifier:
 
         # all_metrics cannot take sparse
         y_val = sparse_to_array(y_val)
+
+        # mkdir for saving models
+        if not SAVED_FOLDER.exists():
+            SAVED_FOLDER.mkdir(parents=True, exist_ok=False)
 
         for model, params in tqdm(zip(self.models, self.grid), total=len(self.models), desc=f"training pipeline"):
             if model in self.to_skip:
@@ -236,8 +243,18 @@ class TFIDFBasedClassifier:
             logger.info(f"{model} score: \n{tfidf_score.head()}\n")
             self.eval_scores = pd.concat([self.eval_scores, tfidf_score])
 
-        logger.info(f"Finished executing sklearn tfidf pipeline for: LogisticRegression (opt), "
-                    f"SGDClassifier, and LinearSVC...\n")
+            # saving model
+            model_fpath = SAVED_FOLDER / f"{self.desc}.pkl"
+            if len(self.eval_metrics) == 1:
+                logger.info(f"saving first model: {model} to {model_fpath}")
+                joblib.dump(self.pipeline, model_fpath)
+            else:
+                if self.eval_metrics[-1]["f1_micro"] > self.eval_metrics[-2]["f1_micro"]:
+                    logger.info(f"saving best model: {model} to {model_fpath}\n")
+                    joblib.dump(self.pipeline, model_fpath)
+
+        logger.info(f"Finished executing sklearn tfidf pipeline for: "
+                    f"{[mod for mod in self.models if mod not in self.to_skip]}\n")
 
     def execute_stack_pipeline(self, x_train, y_train, x_val, y_val):
         logger.info(f"Executing sklearn tfidf pipeline for stacked classifier")
