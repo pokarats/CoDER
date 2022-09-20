@@ -95,21 +95,22 @@ class ClfSwitcher(BaseEstimator):
 
 class TFIDFBasedClassifier:
     def __init__(self, cl_arg):
+        self.to_skip = cl_arg.to_skip
         self.seed = cl_arg.seed
         if cl_arg.extra:
             self.loss = 'modified_huber'
-            self.solver = 'lbfgs' if cl_arg.version == '50' else 'sag'
+            self.solver = 'lbfgs'
             self.class_weight = 'balanced'
             self.regularizer = 1e3
-            self.max_iter = 1000
+            self.max_iter = 5000
             self.lr = 'adaptive'
             self.eta0 = 0.01
         else:
             self.loss = 'hinge'
-            self.solver = 'liblinear' if cl_arg.version == '50' else 'sag'
+            self.solver = 'liblinear'
             self.class_weight = None
             self.regularizer = 1e3
-            self.max_iter = 1000
+            self.max_iter = 5000
             self.lr = 'adaptive'
             self.eta0 = 0.01
 
@@ -215,6 +216,9 @@ class TFIDFBasedClassifier:
         y_val = sparse_to_array(y_val)
 
         for model, params in tqdm(zip(self.models, self.grid), total=len(self.models), desc=f"training pipeline"):
+            if model in self.to_skip:
+                logger.info(f"Skipping execution of {model} model as specified by cl_args...\n")
+                continue
             self.pipeline.set_params(**params)
             logger.info(f"Pipeline for {model} ParamGrid params: \n{self.pipeline.get_params()}\n")
             self.pipeline.fit(x_train, y_train)

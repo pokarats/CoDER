@@ -183,6 +183,10 @@ if __name__ == '__main__':
         help="Name of model to run"
     )
     parser.add_argument(
+        "--to_skip", action="store", nargs='*', default=[],
+        help="Model(s) to skip during execution of tfidf pipeline"
+    )
+    parser.add_argument(
         "--stacked", action="store_true",
         help="Whether to run stacked model, for the top50 data version only"
     )
