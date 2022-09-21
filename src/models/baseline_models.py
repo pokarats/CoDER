@@ -234,6 +234,7 @@ class TFIDFBasedClassifier:
 
             logger.info(f"Evaluating {model} results...")
             # all_metrics cannot take sparse, y_pred may be sparse if y_train is sparse
+            # simple_score is an sklearn function, inputs can be array or sparse (csr)
             y_pred = sparse_to_array(y_pred)
             y_pred_raw = sparse_to_array(y_pred_raw)
 
