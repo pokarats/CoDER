@@ -26,7 +26,8 @@ class LAAT(nn.Module):
         """
         parameter names follow the variables in the LAAT paper
 
-        :param n: sequence length for the input doc D (max num tokens)
+        :param n: vocab size of corpus, should be the same as (len(wv.vocab.keys()) + 2; 2 for unk and pad, i.e.
+        this should be == loaded_np_array.shape[0]
         :type n: int
         :param de: word embedding size for each w_i token in doc D
         :type de: int
@@ -65,8 +66,19 @@ class LAAT(nn.Module):
                 torch.nn.init.xavier_normal_(param)
 
     def forward(self, x, y=None):
+        # get sequence lengths
+        seq_lengths = torch.count_nonzero(x, dim=1).cpu()
+
         x = self.word_embed(x)  # b x n x de
-        H, _ = self.bilstm(x)  # b x n x 2u
+
+        # pack padded sequence
+        x = nn.utils.rnn.pack_padded_sequence(x, seq_lengths, batch_first=True, enforce_sorted=False)
+        H, _ = self.bilstm(x)  # b x n x 2u <-- dim of unpacked H
+
+        # pad packed output H
+        H, unpacked_lengths = nn.utils.rnn.pad_packed_sequence(H, batch_first=True)
+        assert torch.equal(seq_lengths, unpacked_lengths)
+
         Z = torch.tanh(self.W(H))  # b x n x da
         A = torch.softmax(self.U(Z), -1)  # b x n x L
         V = H.transpose(1, 2).bmm(A)  # b x 2u x L
@@ -93,14 +105,20 @@ if __name__ == '__main__':
 
     if random_np_weights.min() < 0:
         random_np_weights += abs(random_np_weights.min()) + 1
-    # do NOT use torch.from_numpy here if original np array is float64, will get dtype array later on!
+    # do NOT use torch.from_numpy here if original np array is float64, will get dtype error later on!
     # torch.Tensor == torch.FloatTensor, gets dtype torch.float32 even if np dtype is float64
     weights_from_np = torch.Tensor(random_np_weights)
 
     # testing pre-trained weights, torch.FloatTensor dtype torch.float32
     random_weights = torch.FloatTensor(32, 100).random_(1, 16)
     model = LAAT(n=32, de=100, L=5, u=256, da=256, dropout=0.3, pre_trained_weights=weights_from_np, trainable=True)
-    x = torch.LongTensor(8, 16).random_(1, 30)
+    x = torch.LongTensor(8, 16).random_(1, 31)
+
+    # simulate padded sequences
+    for row in range(x.shape[0]):
+        eos = np.random.randint(10, 15)
+        x[row, eos:] = 0
+
     y = torch.LongTensor(8, 5).random_(2, 9)
     labels_logits, labels_loss = model(x, y.float())
     print(f"labels_loss: {labels_loss}")
