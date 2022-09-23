@@ -17,108 +17,33 @@ and,
 https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/word2vec.py
 
 """
-from abc import ABC, abstractmethod
+import argparse
+import time
+import traceback
+
 import numpy as np
 from gensim.models import Word2Vec, FastText, KeyedVectors
-import gensim.models
+from datetime import date
 import logging
-import csv
 import struct
 import codecs
 import re
-
 import json
-import pickle
+import sys
 import os
-import argparse
+import platform
 from pathlib import Path
 from tqdm import tqdm
 
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-logger = logging.getLogger(__file__)
+
+if platform.system() != 'Darwin':
+    sys.path.append(os.getcwd())  # only needed for slurm
+from src.utils.corpus_readers import CorpusIter, ProcessedIter, MimicIter, MimicCuiIter
+
 
 PROJ_FOLDER = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = PROJ_FOLDER / f"data/mimic3"
 
-
-class BaseIter(ABC):
-    filename = None
-
-    @abstractmethod
-    def __iter__(self):
-        pass
-
-
-class CorpusIter(BaseIter):
-    def __init__(self, filename):
-        self.filename = filename
-
-    def __iter__(self):
-        with open(self.filename, encoding='utf-8', errors='ignore') as rf:
-            for line in rf:
-                line = line.strip()
-                if not line:
-                    continue
-                sentence_tokens = line.split()
-                yield sentence_tokens
-
-
-class ProcessedIter(BaseIter):
-    def __init__(self, filename, slice_pos=3):
-        self.filename = filename
-        self.slice_pos = slice_pos
-
-    def __iter__(self):
-        with open(self.filename) as f:
-            r = csv.reader(f)
-            next(r)
-            for row in r:
-                yield row[self.slice_pos].split()
-
-
-class MimicIter(ProcessedIter):
-    def __init__(self, filename, slice_pos, sep, cls):
-        super().__init__(filename, slice_pos)
-        self.sep = sep
-        self.cls = cls
-
-    def __iter__(self):
-        with open(self.filename) as f:
-            r = csv.reader(f)
-            next(r)
-            for row in r:
-                for sent_tokens in [[w for w in sent.split() if w != self.cls] for sent in
-                                    row[self.slice_pos].split(self.sep) if sent]:
-                    yield sent_tokens
-
-
-class MimicCuiIter(BaseIter):
-    def __init__(self, filename, threshold, prune=False, discard_cuis_file=None):
-        self.filename = filename
-        self.confidence_threshold = threshold if threshold is not None else 0.7
-        self.prune = prune
-        self.cuis_to_discard = None
-
-        if discard_cuis_file is not None:
-            with open(discard_cuis_file, 'rb') as handle:
-                self.cuis_to_discard = pickle.load(handle)
-
-    def __iter__(self):
-        with open(self.filename) as rf:
-            for line in rf:
-                line = line.strip()
-                if not line:
-                    continue
-                line = json.loads(line)
-                uid = list(line.keys())[0]
-                cui_sent_tokens = [ents[0] for item in line[uid] for ents in item['umls_ents']
-                       if float(ents[-1]) > self.confidence_threshold]
-                if not cui_sent_tokens:
-                    continue
-                if self.prune and self.cuis_to_discard is not None:
-                    yield [cui_token for cui_token in cui_sent_tokens if cui_token not in self.cuis_to_discard]
-                else:
-                    yield cui_sent_tokens
+logger = logging.getLogger(__name__)
 
 
 def train_and_dump_word2vec(
@@ -295,17 +220,18 @@ def load_embeddings(embed_file):
 
 def word_embeddings(dataset_vers,
                     notes_file,
-                    embedding_size,
-                    min_count,
-                    n_iter,
+                    embedding_size=100,
+                    min_count=0,
+                    n_iter=5,
                     n_workers=4,
                     save_wv_only=False,
                     data_iterator=ProcessedIter):
     """
     Updated for Gensim >= 4.0, train and save Word2Vec Model
 
+
     :param save_wv_only: True if saving only the lightweight KeyedVectors object of the trained model
-    :type save_wv_only: gensim.models.keyedvectors
+    :type save_wv_only: bool
     :param dataset_vers: full or 50
     :type dataset_vers: str
     :param notes_file: corpus file path
@@ -319,12 +245,13 @@ def word_embeddings(dataset_vers,
     :param n_workers: how many processes/cpu's to use
     :type n_workers: int
     :param data_iterator: type of corpus iterator to use, depending on corpus file: ProcessedIter, CorpusIter
-    :type data_iterator: class with defined __iter__
-    :return:
-    :rtype:
+    :type data_iterator: initialized class with __iter__
+    :return: path to saved model file
+
     """
-    modelname = f"processed_{Path(notes_file).stem}.model"
-    sentences = data_iterator(dataset_vers, notes_file)
+
+    model_name = f"processed_{Path(notes_file).stem}.model"
+    sentences = data_iterator
 
     model = Word2Vec(vector_size=embedding_size, min_count=min_count, epochs=n_iter, workers=n_workers)
 
@@ -334,11 +261,11 @@ def word_embeddings(dataset_vers,
     logger.info(f"training on {model.corpus_count} sentences over {model.epochs} iterations...")
     model.train(sentences, total_examples=model.corpus_count, epochs=model.epochs)
 
-    embedding_dir = DATA_DIR / f"{modelname.split('.')[-1]}"
+    embedding_dir = Path(notes_file).parent / f"{model_name.split('.')[-1]}"
     if not embedding_dir.exists():
         embedding_dir.mkdir(parents=True, exist_ok=False)
 
-    out_file = embedding_dir / modelname
+    out_file = embedding_dir / model_name
     logger.info(f"writing embeddings to {out_file}")
 
     if save_wv_only:
@@ -529,21 +456,121 @@ def build_pretrain_embedding(embedding_path, word_alphabet, norm):
     return pretrain_emb, embedd_dim
 
 
-def main():
-    version = 'full'
-    normed = True
-    mimic_3_dir = DATA_DIR / version
+def main(cl_args):
+    logger.info(f"\n=========START W2V EMBEDDING TRAINING==========\n")
+    mimic_dir = Path(cl_args.data_dir) / cl_args.version
+    notes_fp = mimic_dir / cl_args.filename
 
-    w2v_file = word_embeddings(version, f'{mimic_3_dir}/train_50.csv', embedding_size=100, min_count=0, n_iter=5)
-    gensim_to_npy(w2v_file, normed=False)
-    if normed:
+    if notes_fp.suffix == '.csv':
+        data_iterator = MimicIter(notes_fp)
+    elif notes_fp.suffix == '.txt':
+        if cl_args.prune:
+            cui_fp = mimic_dir / f"{cl_args.version}_cuis_to_discard.pickle"
+            data_iterator = MimicCuiIter(notes_fp,
+                                         threshold=0.7,
+                                         prune=cl_args.prune,
+                                         discard_cuis_file=cui_fp)
+        else:
+            data_iterator = MimicCuiIter(notes_fp)
+    else:
+        logger.error(f"Invalid file type to reade!!")
+        raise ValueError
+
+    w2v_file = word_embeddings(dataset_vers=cl_args.version,
+                               notes_file=notes_fp,
+                               embedding_size=100,
+                               min_count=cl_args.min_count,
+                               n_iter=5,
+                               n_workers=cl_args.n_process,
+                               save_wv_only=False,
+                               data_iterator=data_iterator)
+    gensim_to_npy(w2v_file, cl_args.normed)
+
+    if cl_args.normed:
         out_fname = f"{w2v_file.stem}_normed"
-        gensim_to_npy(w2v_file, normed=normed, outfile=out_fname)
-    # gensim_to_embeddings('%s/processed_full.w2v' % mimic_3_dir, '%s/vocab.csv' % mimic_3_dir)
+        gensim_to_npy(w2v_file, normed=cl_args.normed, outfile=out_fname)
 
+    # gensim_to_embeddings('%s/processed_full.w2v' % mimic_3_dir, '%s/vocab.csv' % mimic_3_dir)
     # fasttext_file = fasttext_embeddings(Y, '%s/disch_full.csv' % MIMIC_3_DIR, 100, 0, 5)
     # gensim_to_fasttext_embeddings('%s/processed_full.fasttext' % MIMIC_3_DIR, '%s/vocab.csv' % MIMIC_3_DIR, Y)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--data_dir", action="store", type=str, default="data/mimic3",
+        help="Path to data directory containing either MIMIC-III or linked_data"
+    )
+    parser.add_argument(
+        "--version", action="store", type=str, default="50",
+        help="Name of mimic-III dataset version to use: full vs 50 (for top50) or 1 for a 1 sample version"
+    )
+    parser.add_argument(
+        "--seed", action="store", type=int, default=23,
+        help="Random seed for reproducibility"
+    )
+    parser.add_argument(
+        "--min_count", action="store", type=int, default=0,
+        help="Min count for vocab gensim Word2Vec training"
+    )
+    parser.add_argument(
+        "--threshold", action="store", type=float, default=0.7,
+        help="Min threshold for similarity"
+    )
+    parser.add_argument(
+        "--filename", action="store", type=str, default="train_50.csv",
+        help="notes_filename to process, just the filename NOT whole path"
+    )
+    parser.add_argument(
+        "--n_process", action="store", type=int, default=4,
+        help="Number of processes to run in parallel multi-processing."
+    )
+    parser.add_argument(
+        "--prune", action="store_true",
+        help="Whether to prune CUIs before w2vec embeddings"
+    )
+    parser.add_argument(
+        "--normed", action="store_true",
+        help="Whether to get L2 normed vector for w2v embeddings"
+    )
+    parser.add_argument(
+        "--quiet", action="store_true",
+        help="Do not print to stdout (log only)."
+    )
+
+    args = parser.parse_args(sys.argv[1:])
+
+    # Setup logging and start timer
+    basename = Path(__file__).stem
+    log_folder = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}"
+    log_file = log_folder / f"{time.strftime('%Hh%Mm%Ss')}_{basename}_{args.version}_{args.comment}.log"
+
+    if not log_folder.exists():
+        log_folder.mkdir(parents=True, exist_ok=False)
+
+    logging.basicConfig(format="%(asctime)s - %(filename)s:%(funcName)s %(levelname)s: %(message)s",
+                        filename=log_file,
+                        level=logging.INFO)
+
+    # Manage the LOG and where to pipe it (log file only or log file + STDOUT)
+    if not args.quiet:
+        fmtr = logging.Formatter(fmt="%(funcName)s %(levelname)s: %(message)s")
+        stderr_handler = logging.StreamHandler()
+        stderr_handler.formatter = fmtr
+        logging.getLogger().addHandler(stderr_handler)
+        logging.info("Printing activity to the console")
+    logger = logging.getLogger(__name__)
+    logger.info(f"Running parameter \n{str(args.__dict__)}")
+
+    try:
+        main(args)
+    except Exception as exp:
+        if not args.quiet:
+            print(f"Unhandled error: {repr(exp)}")
+        logger.error(f"Unhandled error: {repr(exp)}")
+        logger.error(traceback.format_exc())
+        sys.exit(-1)
+    finally:
+        print(f"All Done, logged to {log_file}).")
+

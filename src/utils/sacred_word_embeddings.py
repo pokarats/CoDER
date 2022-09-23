@@ -40,25 +40,8 @@ PROJ_FOLDER = Path(__file__).resolve().parent.parent.parent
 SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}"
 
 
-def remove_progress_bar(captured_out):
-    lines = (line for line in captured_out.splitlines() if 's/it]' not in line)
-    return '\n'.join(lines)
-
-
 # creating sacred experiment
 ex = Experiment()
-
-# set up a custom logger
-logger = logging.getLogger(__name__)
-logger.handlers = []
-ch = logging.StreamHandler()
-formatter = logging.Formatter("%(asctime)s - %(filename)s:%(funcName)s %(levelname)s: %(message)s")
-ch.setFormatter(formatter)
-logger.addHandler(ch)
-logger.setLevel("INFO")
-
-ex.logger = logger
-ex.captured_out_filter = remove_progress_bar
 ex.observers.append(FileStorageObserver(SAVED_FOLDER))
 
 
@@ -241,9 +224,10 @@ def run_word_embeddings(normed, _log):
     _log.info(f"\n=========START W2V EMBEDDING TRAINING==========\n")
 
     w2v_file = word_embeddings()
-    gensim_to_npy(w2v_file, normed)
+    gensim_to_npy(w2v_file)
 
     if normed:
+        _log.info(f"saving normed vectors as well...")
         out_fname = f"{w2v_file.stem}_normed"
         gensim_to_npy(w2v_file, normed=normed, outfile=out_fname)
 
