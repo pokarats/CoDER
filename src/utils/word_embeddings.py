@@ -18,12 +18,89 @@ import logging
 import csv
 import struct
 import codecs
+import re
 
+import json
+import os
+import argparse
+from pathlib import Path
 from tqdm import tqdm
 
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger(__file__)
+
+
+class CorpusIterator:
+
+    def __init__(self, fname):
+        self.fname = fname
+
+    def __iter__(self):
+        with open(self.fname, encoding='utf-8', errors='ignore') as rf:
+            for line in rf:
+                line = line.strip()
+                if not line:
+                    continue
+                sentence_tokens = line.split()
+                yield sentence_tokens
+
+
+class ProcessedIter:
+
+    def __init__(self, Y, filename):
+        self.filename = filename
+
+    def __iter__(self):
+        with open(self.filename) as f:
+            r = csv.reader(f)
+            next(r)
+            for row in r:
+                yield row[3].split()
+
+
+def train_and_dump_word2vec(
+        medline_entities_linked_fname,
+        output_dir,
+        n_workers=4,
+        n_iter=10
+):
+    # fix embed dim = 100 and max vocab size to 50k
+    model = w2v.Word2Vec(size=100, workers=n_workers, iter=n_iter, max_final_vocab=50000)
+    sentences = CorpusIterator(medline_entities_linked_fname)
+
+    logger.info(f'Building word2vec vocab on {medline_entities_linked_fname}...')
+    model.build_vocab(sentences)
+
+    logger.info('Training ...')
+    model.train(sentences, total_examples=model.corpus_count, epochs=model.iter)
+
+    os.makedirs(output_dir, exist_ok=True)
+    logger.info('Saving word2vec model ...')
+    model.save(os.path.join(output_dir, 'word2vec.pubmed2019.50d.gz'))
+
+    wv = model.wv
+    del model  # free up memory
+
+    word2id = {"<PAD>": 0, "<UNK>": 1}
+    mat = np.zeros((len(wv.vocab.keys()) + 2, 100))
+    # initialize UNK embedding with random normal
+    mat[1] = np.random.randn(100)
+
+    for word in sorted(wv.vocab.keys()):
+        vocab_item = wv.vocab[word]
+        vector = wv.vectors[vocab_item.index]
+        mat[len(word2id)] = vector
+        word2id[word] = len(word2id)
+
+    mat_fname = Path(output_dir) / f'word2vec.guttmann.100d_mat.npy'
+    map_fname = Path(output_dir) / f'word2vec.guttmann.100d_word2id.json'
+
+    logger.info(f'Saving word2id at {map_fname} and numpy matrix at {mat_fname} ...')
+
+    np.save(mat_fname, mat)
+    with open(map_fname, 'w', encoding='utf-8', errors='ignore') as wf:
+        json.dump(word2id, wf)
 
 
 def gensim_to_embeddings(wv_file, vocab_file, Y, outfile=None):
@@ -146,19 +223,6 @@ def fasttext_embeddings(Y, notes_file, embedding_size, min_count, n_iter):
     logger.info("writing embeddings to %s" % (out_file))
     model.save(out_file)
     return out_file
-
-
-class ProcessedIter(object):
-    
-    def __init__(self, Y, filename):
-        self.filename = filename
-    
-    def __iter__(self):
-        with open(self.filename) as f:
-            r = csv.reader(f)
-            next(r)
-            for row in r:
-                yield (row[3].split())
 
 
 def _readString(f, code):
@@ -329,8 +393,8 @@ def main():
     w2v_file = word_embeddings(Y, '%s/disch_full.csv' % MIMIC_3_DIR, 100, 0, 5)
     gensim_to_embeddings('%s/processed_full.w2v' % MIMIC_3_DIR, '%s/vocab.csv' % MIMIC_3_DIR, Y)
     
-    fasttext_file = fasttext_embeddings(Y, '%s/disch_full.csv' % MIMIC_3_DIR, 100, 0, 5)
-    gensim_to_fasttext_embeddings('%s/processed_full.fasttext' % MIMIC_3_DIR, '%s/vocab.csv' % MIMIC_3_DIR, Y)
+    # fasttext_file = fasttext_embeddings(Y, '%s/disch_full.csv' % MIMIC_3_DIR, 100, 0, 5)
+    # gensim_to_fasttext_embeddings('%s/processed_full.fasttext' % MIMIC_3_DIR, '%s/vocab.csv' % MIMIC_3_DIR, Y)
 
 
 if __name__=="__main__":
