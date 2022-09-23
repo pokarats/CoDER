@@ -1,15 +1,23 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+DESCRIPTION: Python template with an argument parser and logger. Put all the "main" logic into the method called "main".
+             Only use the true "__main__" section to add script arguments. The logger writes to a hidden folder './log/'
+             and uses the name of this file, followed by the date (by default).
 
-# ----------------------------------------------------------------------------------------------------------------
-# Slight changes from:
-# 
-# https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/preprocess_mimic3.py
-#
-# and
-#
-# https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
-# ----------------------------------------------------------------------------------------------------------------
 
+@copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
+            Intelligenz GmbH or its licensors, as applicable.
+
+@author: Noon Pokaratsiri Goldstein; this is a modification from the code base obtained from:
+
+https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/preprocess_mimic3.py
+https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
+and,
+https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/word2vec.py
+
+"""
+from abc import ABC, abstractmethod
 import numpy as np
 from gensim.models import Word2Vec, FastText, KeyedVectors
 import gensim.models
@@ -20,6 +28,7 @@ import codecs
 import re
 
 import json
+import pickle
 import os
 import argparse
 from pathlib import Path
@@ -32,13 +41,20 @@ PROJ_FOLDER = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJ_FOLDER / f"data/mimic3"
 
 
-class CorpusIter:
+class BaseIter(ABC):
+    filename = None
 
-    def __init__(self, fname):
-        self.fname = fname
+    @abstractmethod
+    def __iter__(self):
+        pass
+
+
+class CorpusIter(BaseIter):
+    def __init__(self, filename):
+        self.filename = filename
 
     def __iter__(self):
-        with open(self.fname, encoding='utf-8', errors='ignore') as rf:
+        with open(self.filename, encoding='utf-8', errors='ignore') as rf:
             for line in rf:
                 line = line.strip()
                 if not line:
@@ -47,18 +63,62 @@ class CorpusIter:
                 yield sentence_tokens
 
 
-class ProcessedIter:
-
-    def __init__(self, version, filename):
+class ProcessedIter(BaseIter):
+    def __init__(self, filename, slice_pos=3):
         self.filename = filename
-        self.version = version
+        self.slice_pos = slice_pos
 
     def __iter__(self):
         with open(self.filename) as f:
             r = csv.reader(f)
             next(r)
             for row in r:
-                yield row[3].split()
+                yield row[self.slice_pos].split()
+
+
+class MimicIter(ProcessedIter):
+    def __init__(self, filename, slice_pos, sep, cls):
+        super().__init__(filename, slice_pos)
+        self.sep = sep
+        self.cls = cls
+
+    def __iter__(self):
+        with open(self.filename) as f:
+            r = csv.reader(f)
+            next(r)
+            for row in r:
+                for sent_tokens in [[w for w in sent.split() if w != self.cls] for sent in
+                                    row[self.slice_pos].split(self.sep) if sent]:
+                    yield sent_tokens
+
+
+class MimicCuiIter(BaseIter):
+    def __init__(self, filename, threshold, prune=False, discard_cuis_file=None):
+        self.filename = filename
+        self.confidence_threshold = threshold if threshold is not None else 0.7
+        self.prune = prune
+        self.cuis_to_discard = None
+
+        if discard_cuis_file is not None:
+            with open(discard_cuis_file, 'rb') as handle:
+                self.cuis_to_discard = pickle.load(handle)
+
+    def __iter__(self):
+        with open(self.filename) as rf:
+            for line in rf:
+                line = line.strip()
+                if not line:
+                    continue
+                line = json.loads(line)
+                uid = list(line.keys())[0]
+                cui_sent_tokens = [ents[0] for item in line[uid] for ents in item['umls_ents']
+                       if float(ents[-1]) > self.confidence_threshold]
+                if not cui_sent_tokens:
+                    continue
+                if self.prune and self.cuis_to_discard is not None:
+                    yield [cui_token for cui_token in cui_sent_tokens if cui_token not in self.cuis_to_discard]
+                else:
+                    yield cui_sent_tokens
 
 
 def train_and_dump_word2vec(
@@ -271,7 +331,7 @@ def word_embeddings(dataset_vers,
     logger.info(f"building word2vec vocab on {notes_file}...")
     model.build_vocab(sentences)
 
-    logger.info("training...")
+    logger.info(f"training on {model.corpus_count} sentences over {model.epochs} iterations...")
     model.train(sentences, total_examples=model.corpus_count, epochs=model.epochs)
 
     embedding_dir = DATA_DIR / f"{modelname.split('.')[-1]}"
@@ -294,7 +354,7 @@ def word_embeddings(dataset_vers,
 
 def fasttext_embeddings(Y, notes_file, embedding_size, min_count, n_iter):
     modelname = "processed_%s.fasttext" % (Y)
-    sentences = ProcessedIter(Y, notes_file)
+    sentences = ProcessedIter(notes_file)
 
     model = FastText(vector_size=embedding_size, min_count=min_count, epochs=n_iter)
     logger.info("building fasttext vocab on %s..." % (notes_file))
