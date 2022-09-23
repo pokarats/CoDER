@@ -58,11 +58,9 @@ def convert_by_vocab(vocab, items, max_seq_length=None, blank_id=0, unk_id=1):
     """Converts a sequence of [tokens|ids] using the vocab."""
     output = []
     for item in items:
-        if item in vocab:
-            output.append(vocab[item])
-        else:
-            output.append(unk_id)
-    if max_seq_length != None:
+        # any work token not in vocab gets assigned unk_id by default
+        output.append(vocab.get(item, default=unk_id))
+    if max_seq_length is not None:
         if len(output) > max_seq_length:
             output = output[:max_seq_length]
         else:
