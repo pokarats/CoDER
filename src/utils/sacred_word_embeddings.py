@@ -92,6 +92,7 @@ def gensim_to_npy(w2v_model_file, _log, normed=False, outfile=None, embedding_di
 def word_embeddings(dataset_vers,
                     notes_file,
                     _log,
+                    pruned=False,
                     embedding_size=100,
                     min_count=0,
                     n_iter=5,
@@ -101,6 +102,8 @@ def word_embeddings(dataset_vers,
     """
     Updated for Gensim >= 4.0, train and save Word2Vec Model
 
+    :param pruned: True if pruned, False if as is
+    :type pruned: bool
     :param _log: logging for Sacred Experiment
     :type _log: logging
     :param save_wv_only: True if saving only the lightweight KeyedVectors object of the trained model
@@ -123,7 +126,10 @@ def word_embeddings(dataset_vers,
 
     """
 
-    model_name = f"processed_{Path(notes_file).stem}.model"
+    if pruned:
+        model_name = f"processed_{Path(notes_file).stem}_pruned.model"
+    else:
+        model_name = f"processed_{Path(notes_file).stem}.model"
     sentences = data_iterator
 
     model = Word2Vec(vector_size=embedding_size, min_count=min_count, epochs=n_iter, workers=n_workers)

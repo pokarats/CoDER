@@ -3,7 +3,7 @@
 # SLURM environment arguments
 MYDATA=/netscratch/pokarats/ds
 IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_neptune2.sqsh
-NUM_CPUS=16
+NUM_CPUS=8
 MEM_PER_CPU=4GB
 
 # variables for srun and python
@@ -21,13 +21,13 @@ do
     --nodes=1 \
     --mail-type=END,FAIL \
     --mail-user=noon.pokaratsiri@dfki.de \
-  python src/utils/sacred_word_embeddings.py with data_dir="$MYDATA" version="$vers" n_workers="$NUM_CPUS"
+  python src/utils/sacred_word_embeddings.py with data_dir="$MYDATA" 'version=$vers' n_workers="$NUM_CPUS"
 
   sleep 2
 
   for cfg in cui cui_pruned
   do
-    echo "Submitting version: $vers cui"
+    echo "Submitting version: $vers $cfg"
 
     srun -K -p RTXA6000-MLT \
       --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
@@ -39,7 +39,7 @@ do
       --nodes=1 \
       --mail-type=END,FAIL \
       --mail-user=noon.pokaratsiri@dfki.de \
-    python src/utils/sacred_word_embeddings.py with $cfg data_dir="$MYDATA" version="$vers" n_workers="$NUM_CPUS"
+    python src/utils/sacred_word_embeddings.py with $cfg data_dir="$MYDATA" 'version=$vers' n_workers="$NUM_CPUS"
 
     sleep 1
   done
