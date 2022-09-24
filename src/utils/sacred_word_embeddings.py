@@ -83,6 +83,8 @@ def gensim_to_npy(w2v_model_file, _log, normed=False, outfile=None, embedding_di
     with open(map_fname, 'w', encoding='utf-8', errors='ignore') as wf:
         json.dump(word2id, wf)
 
+    return map_fname, map_fname
+
 
 @ex.capture
 def word_embeddings(dataset_vers,
@@ -220,20 +222,26 @@ def cui_pruned():
 
 
 @ex.main
-def run_word_embeddings(normed, _log):
+def run_word_embeddings(normed, _log, _run):
     _log.info(f"\n=========START W2V EMBEDDING TRAINING==========\n")
 
     w2v_file = word_embeddings()
-    gensim_to_npy(w2v_file)
+    npy_fp, mapping_fp = gensim_to_npy(w2v_file)
 
     if normed:
         _log.info(f"saving normed vectors as well...")
         out_fname = f"{w2v_file.stem}_normed"
-        gensim_to_npy(w2v_file, normed=normed, outfile=out_fname)
+        npy_fp_norm, mapping_fp_norm = gensim_to_npy(w2v_file, normed=normed, outfile=out_fname)
 
-    # gensim_to_embeddings('%s/processed_full.w2v' % mimic_3_dir, '%s/vocab.csv' % mimic_3_dir)
-    # fasttext_file = fasttext_embeddings(Y, '%s/disch_full.csv' % MIMIC_3_DIR, 100, 0, 5)
-    # gensim_to_fasttext_embeddings('%s/processed_full.fasttext' % MIMIC_3_DIR, '%s/vocab.csv' % MIMIC_3_DIR, Y)
+        # log model files to Sacred
+        ex.add_artifact(filename=f"{npy_fp_norm}")
+        ex.add_artifact(filename=f"{mapping_fp_norm}")
+
+    # Log model files to Sacred
+    ex.add_artifact(filename=f"{w2v_file}")
+    ex.add_artifact(filename=f"{npy_fp}")
+    ex.add_artifact(filename=f"{mapping_fp}")
+    _log.info(f"\n=========FINISHED W2V EMBEDDING TRAINING==========\n")
 
 
 if __name__ == "__main__":
