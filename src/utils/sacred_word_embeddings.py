@@ -160,10 +160,7 @@ def default_cfg():
     data_dir = PROJ_FOLDER / "data"
     version = '50'
 
-    if not isinstance(data_dir, Path):
-        data_dir = Path(data_dir)
-
-    mimic_dir = data_dir / "mimic3" / version
+    mimic_dir = Path(data_dir) / "mimic3" / version
 
     # corpus_readers Iterator params
     iter_params = {"filename": str(mimic_dir / f"train_{version}.csv"),
@@ -192,9 +189,7 @@ def cui():
     data_dir = PROJ_FOLDER / "data"
     version = '50'
 
-    if not isinstance(data_dir, Path):
-        data_dir = Path(data_dir)
-    mimic_dir = data_dir / "linked_data" / version
+    mimic_dir = Path(data_dir) / "linked_data" / version
 
     # corpus_readers Iterator params
     iter_params = {"filename": str(mimic_dir / f"train_{version}_umls.txt"),
@@ -213,9 +208,8 @@ def cui_pruned():
     # data directory and file organization
     data_dir = PROJ_FOLDER / "data"
     version = '50'
-    if not isinstance(data_dir, Path):
-        data_dir = Path(data_dir)
-    mimic_dir = data_dir / "linked_data" / version
+   
+    mimic_dir = Path(data_dir) / "linked_data" / version
 
     # corpus_readers Iterator params
     iter_params = {"filename": str(mimic_dir / f"train_{version}_umls.txt"),
