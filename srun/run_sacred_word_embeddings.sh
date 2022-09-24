@@ -20,4 +20,4 @@ srun -K -p RTXA6000-MLT \
   --nodes=1 \
   --mail-type=END,FAIL \
   --mail-user=noon.pokaratsiri@dfki.de \
-python src/utils/sacred_word_embeddings.py with data_dir="$MYDATA"
+python src/utils/sacred_word_embeddings.py with data_dir="$MYDATA" n_workers="$NUM_CPUS"
