@@ -2,7 +2,7 @@
 
 # SLURM environment arguments
 MYDATA=/netscratch/pokarats/ds
-IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_neptune1.sqsh
+IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_neptune2.sqsh
 NUM_CPUS=8
 MEM_PER_CPU=16GB
 

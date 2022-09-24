@@ -48,10 +48,11 @@ ex.observers.append(FileStorageObserver(SAVED_FOLDER))
 @ex.capture
 def gensim_to_npy(w2v_model_file, _log, normed=False, outfile=None, embedding_dim=100):
 
+    # gensim can load from PosixPath!!
     if Path(w2v_model_file).suffix == '.wordvectors':
-        wv = KeyedVectors.load(w2v_model_file, mmap='r')
+        wv = KeyedVectors.load(str(w2v_model_file), mmap='r')
     else:
-        loaded_model = Word2Vec.load(w2v_model_file)
+        loaded_model = Word2Vec.load(str(w2v_model_file))
         wv = loaded_model.wv  # this is just the KeyedVectors parts
         # free up memory
         del loaded_model
@@ -147,7 +148,7 @@ def word_embeddings(dataset_vers,
         model_wv.save(out_file)
         return out_file
 
-    model.save(out_file)
+    model.save(str(out_file))
     return out_file
 
 
