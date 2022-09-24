@@ -21,7 +21,7 @@ do
     --nodes=1 \
     --mail-type=END,FAIL \
     --mail-user=noon.pokaratsiri@dfki.de \
-  python src/utils/sacred_word_embeddings.py with data_dir="$MYDATA" 'version=$vers' n_workers="$NUM_CPUS"
+  python src/utils/sacred_word_embeddings.py with data_dir="$MYDATA" 'version="$vers"' n_workers="$NUM_CPUS"
 
   sleep 2
 
@@ -39,7 +39,7 @@ do
       --nodes=1 \
       --mail-type=END,FAIL \
       --mail-user=noon.pokaratsiri@dfki.de \
-    python src/utils/sacred_word_embeddings.py with $cfg data_dir="$MYDATA" 'version=$vers' n_workers="$NUM_CPUS"
+    python src/utils/sacred_word_embeddings.py with $cfg data_dir="$MYDATA" 'version="$vers"' n_workers="$NUM_CPUS"
 
     sleep 1
   done
