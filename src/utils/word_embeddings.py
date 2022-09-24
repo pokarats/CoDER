@@ -468,7 +468,7 @@ def main(cl_args):
             cui_fp = mimic_dir / f"{cl_args.version}_cuis_to_discard.pickle"
             data_iterator = MimicCuiIter(notes_fp,
                                          threshold=0.7,
-                                         prune=cl_args.prune,
+                                         pruned=cl_args.prune,
                                          discard_cuis_file=cui_fp)
         else:
             data_iterator = MimicCuiIter(notes_fp)

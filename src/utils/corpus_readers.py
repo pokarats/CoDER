@@ -96,18 +96,18 @@ class MimicCuiIter(BaseIter):
     """
     Sentence iterator for MIMIC-III linked_data set where each doc is represented by UMLS CUI entities
     """
-    def __init__(self, filename, threshold=0.7, prune=False, discard_cuis_file=None):
+    def __init__(self, filename, threshold=0.7, pruned=False, discard_cuis_file=None):
         """
         :param threshold: confidence threshold for UMLS CUIS, default == 0.7 from scispacy
         :type threshold: float
-        :param prune: True to discard CUIs pruned in concepts_pruning.py step
-        :type prune: bool
+        :param pruned: True to discard CUIs pruned in concepts_pruning.py step
+        :type pruned: bool
         :param discard_cuis_file: path to pickle file of CUIs to discard from concepts_pruning.py step
         :type discard_cuis_file: str or Path
         """
         self.filename = filename
         self.confidence_threshold = threshold if threshold is not None else 0.7
-        self.prune = prune
+        self.prune = pruned
         self.cuis_to_discard = None
 
         if discard_cuis_file is not None:

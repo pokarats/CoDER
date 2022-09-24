@@ -172,7 +172,7 @@ def default_cfg():
     iter_params = {"filename": str(mimic_dir / f"train_{version}.csv"),
                    "slice_pos": 2,
                    "threshold": 0.7,
-                   "prune": False,
+                   "pruned": False,
                    "discard_cuis_file": None}
 
     # gensim.models.Word2Vec params, captured func
@@ -184,6 +184,7 @@ def default_cfg():
     n_workers = 4
     save_wv_only = False
     data_iterator = MimicIter(notes_file)
+    pruned = iter_params["pruned"]
     normed = False  # whether to also save L2-normed vectors as embeddings
 
 
@@ -221,15 +222,16 @@ def cui_pruned():
     iter_params = {"filename": str(mimic_dir / f"train_{version}_umls.txt"),
                    "slice_pos": 2,
                    "threshold": 0.7,
-                   "prune": True,
+                   "pruned": True,
                    "discard_cuis_file": str(mimic_dir / f"{version}_cuis_to_discard.pickle")}
 
     # gensim.models.Word2Vec params
     notes_file = iter_params["filename"]
     data_iterator = MimicCuiIter(notes_file,
                                  iter_params["threshold"],
-                                 iter_params["prune"],
+                                 iter_params["pruned"],
                                  iter_params["discard_cuis_file"])
+    pruned = iter_params["pruned"]
 
 
 @ex.main
