@@ -33,7 +33,7 @@ from sacred.observers import FileStorageObserver
 
 if platform.system() != 'Darwin':
     sys.path.append(os.getcwd())  # only needed for slurm
-from src.utils.corpus_readers import ProcessedIter, MimicIter, MimicCuiIter
+from corpus_readers import ProcessedIter, MimicIter, MimicCuiIter
 
 
 PROJ_FOLDER = Path(__file__).resolve().parent.parent.parent
@@ -64,6 +64,7 @@ def gensim_to_npy(w2v_model_file, _log, normed=False, outfile=None, embedding_di
     # initialize UNK embedding with random normal
     mat[1] = np.random.randn(100)
 
+    _log.info(f"re_ordering word2id based on adding PAD and UNK tokens...")
     for word in sorted(wv.key_to_index.keys()):
         vector = wv.get_vector(word, norm=normed)
         mat[len(word2id)] = vector
