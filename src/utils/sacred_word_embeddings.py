@@ -37,7 +37,7 @@ from corpus_readers import ProcessedIter, MimicIter, MimicCuiIter
 
 
 PROJ_FOLDER = Path(__file__).resolve().parent.parent.parent
-SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}"
+SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}/{Path(__file__).stem}"
 
 
 # creating sacred experiment
@@ -208,7 +208,7 @@ def cui_pruned():
     # data directory and file organization
     data_dir = PROJ_FOLDER / "data"
     version = '50'
-   
+
     mimic_dir = Path(data_dir) / "linked_data" / version
 
     # corpus_readers Iterator params
@@ -239,12 +239,10 @@ def run_word_embeddings(normed, _log, _run):
         npy_fp_norm, mapping_fp_norm = gensim_to_npy(w2v_file, normed=normed, outfile=out_fname)
 
         # log model files to Sacred
-        ex.add_artifact(filename=f"{npy_fp_norm}")
         ex.add_artifact(filename=f"{mapping_fp_norm}")
 
     # Log model files to Sacred
     ex.add_artifact(filename=f"{w2v_file}")
-    ex.add_artifact(filename=f"{npy_fp}")
     ex.add_artifact(filename=f"{mapping_fp}")
     _log.info(f"\n=========FINISHED W2V EMBEDDING TRAINING==========\n")
 
