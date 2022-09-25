@@ -91,9 +91,9 @@ class PrepareData:
         with open(filepath, 'rb') as handle:
             self.cuis_to_discard = pickle.load(handle)
 
-    def init_mlbinarizer(self, labels=None):
+    def init_mlbinarizer(self, labels=None, sparse_output=True):
         self.mlbinarizer = MultiLabelBinarizer(classes=tuple(self.all_icd9) if not labels else tuple(labels),
-                                               sparse_output=True)
+                                               sparse_output=sparse_output)
 
     def get_partition_data(self, partition, version, pruning_file="50_cuis_to_discard.pickle"):
         corpus_reader = ConceptCorpusReader(self.linked_data_dir, partition, version)
