@@ -3,10 +3,13 @@
 import torch
 import numpy as np
 import random
+import logging
 
 from torch import optim
 from sklearn.metrics import f1_score
 from tqdm import tqdm, trange
+from pathlib import Path
+from datetime import date
 
 
 # get rid of this if using Sacred as it's done by them otherwise pass in their seed param
@@ -19,7 +22,15 @@ def set_seed(seed):
     random.seed(seed)
 
 
-set_seed(42)
+# set_seed(42)  # uncomment this if not running with Sacred
+
+logger = logging.getLogger(__name__)
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+SAVE_FOLDER = PROJECT_DIR / "res" / f"{date.today():%y_%m_%d}"
+
+if not SAVE_FOLDER.exists():
+    SAVE_FOLDER.mkdir(parents=True, exist_ok=False)
 
 
 def train(
@@ -29,10 +40,11 @@ def train(
         epochs,
         lr,
         device,
-        _run,  # Sacred
+        _run,  # Sacred metrics api
+        early_stop=False,
         decay_rate=1.0,
         grad_clip=None,
-        model_save_fname="model.pt"
+        model_save_fname="LAAT_model"
 ):
     optimizer = optim.Adam(model.parameters(), lr=lr)
     if decay_rate > 0.:
@@ -77,20 +89,36 @@ def train(
 
             score, eval_data = evaluate(dev_dataloader, model, device)
 
+            # first epoch
             if best_fmicro is None:
                 best_fmicro = score
+            if last_fmicro is None:
+                last_fmicro = score
 
             if score >= best_fmicro:
                 best_fmicro = score
-                torch.save(model.state_dict(), "./best_{}".format(model_save_fname))
+                logger.info(f"saving best model so far from epoch: {epoch_no}, micro f1: {score}\n")
+                torch.save(model.state_dict(), f"{SAVE_FOLDER / f'best_{model_save_fname}.pt'}")
 
+            if early_stop:
+                if score < last_fmicro:
+                    n_patience -= 1
+                    if n_patience == 0:
+                        logger.info(f"No. tolerance reached for worse score than last!\n"
+                                    f"Early stopping triggered in {epoch_no} epochs\n")
+                        evals.append((epoch_no, score, eval_data))
+                        break
+
+            # Sacred/Neptune logging
             _run.log_scalar("training/epoch/loss", tr_loss / nb_tr_examples, epoch_no)
             _run.log_scalar("training/epoch/val_loss", eval_data[-1], epoch_no)
             _run.log_scalar("training/epoch/val_score", score, epoch_no)
+
+            last_fmicro = score
             evals.append((epoch_no, score, eval_data))
 
     except KeyboardInterrupt:
-        print('-' * 89)
+        print('*' * 20)
         print('Exiting from training early')
 
     return evals
@@ -101,7 +129,7 @@ def evaluate(dataloader, model, device, no_labels=False):
     model.eval()
     labels_logits, labels_preds, labels = list(), list(), list()
 
-    ids = list()
+    dataset_doc_ids = [items[0] for items in dataloader.dataset.data]
     avg_loss = 0.
 
     def append(all_tensors, batch_tensor):
@@ -118,7 +146,7 @@ def evaluate(dataloader, model, device, no_labels=False):
             return tensor.detach().cpu().numpy()
 
     with torch.no_grad():
-        for batch in tqdm(dataloader, desc="Iteration"):
+        for batch in tqdm(dataloader, desc="Eval Iteration"):
             batch = tuple(t.to(device) for t in batch)
             if no_labels:
                 b_inputs = batch
@@ -126,7 +154,7 @@ def evaluate(dataloader, model, device, no_labels=False):
                 b_inputs, b_labels = batch
 
             if not no_labels:
-                b_labels_logits, b_labels_loss = model(b_inputs, b_labels)
+                b_labels_logits, b_labels_loss = model(b_inputs, b_labels.float())
                 avg_loss += b_labels_loss.item()
             else:
                 b_labels_logits = model(b_inputs)
@@ -149,20 +177,29 @@ def evaluate(dataloader, model, device, no_labels=False):
     if not no_labels:
         labels = labels[0]
         avg_loss /= len(dataloader)
-    ids = [items[0] for items in dataloader.dataset.data]
 
+    # get MultilabelBinarized that's been fit to inverse transform labels
     mlb = dataloader.dataset.mlb
     if not no_labels:
         final_labels, final_preds = normalize_labels(labels, labels_preds, mlb)
-        mlb_labels = mlb.transform(final_labels)
-        mlb_preds = mlb.transform(final_preds)
-        score = f1_score(y_true=mlb_labels, y_pred=mlb_preds, average='micro')
-        print("\nEvaluation - loss: {:.6f}  f1: {:.4f}%\n".format(avg_loss, score * 100))
+        score = f1_score(y_true=labels, y_pred=labels_preds, average='micro')
+        logger.info(f"\nEvaluation - loss: {avg_loss:.6f}  f1: {score * 100:.4f}\n")
     else:
         score = 0.
-        return score, (labels_logits, mlb.inverse_transform(labels_preds), None, ids, avg_loss)
+        eval_data = {"logits": labels_logits,
+                        "predicted": mlb.inverse_transform(labels_preds),
+                        "true_labels": None,
+                        "doc_ids": dataset_doc_ids,
+                        "avg_loss": avg_loss}
+        return score, eval_data
 
-    return score, (labels_logits, final_preds, final_labels, ids, avg_loss)
+    eval_data = {"logits": labels_logits,
+                 "predicted": final_preds,
+                 "true_labels": final_labels,
+                 "doc_ids": dataset_doc_ids,
+                 "avg_loss": avg_loss}
+
+    return score, eval_data
 
 
 def normalize_labels(labels, labels_preds, mlb):
@@ -179,30 +216,36 @@ def normalize_labels(labels, labels_preds, mlb):
     """
     final_labels = mlb.inverse_transform(labels)
     final_preds = mlb.inverse_transform(labels_preds)
-    """
-    for i in range(len(labels)):
-        l, lp = labels[i], labels_preds[i]
-        l = np.nonzero(l)[0]
-        lp = np.nonzero(lp)[0]
-        final_labels.append([f'{mlb.classes_[a]}' for a in l])
-        final_preds.append([f'{mlb.classes_[a]}' for a in lp])
-    """
 
     return final_labels, final_preds
 
 
-def generate_preds_file(preds, preds_ids, preds_file):
+def generate_preds_file(preds, pred_doc_ids, preds_file):
+    """
+
+    :param preds: non-binarized version of predicted labels for the dataset partition
+    :type preds: iterable of labels
+    :param pred_doc_ids: doc_ids for the dataset partition (should be what's used in dataloader.dataset
+    :type pred_doc_ids: iterable of ids
+    :param preds_file: path to file for saving preds
+    :type preds_file: str or Path
+    :return: predicted labels in non-binarized format
+    :rtype: iterable of iterables
+    """
     docid2preds = dict()
     for idx in range(len(preds)):
-        docid2preds[preds_ids[idx]] = preds[idx]
+        docid2preds[pred_doc_ids[idx]] = preds[idx]
 
     with open(preds_file, "w") as wf:
         for doc_id, preds in docid2preds.items():
             doc_id = doc_id.strip()
-            if preds == ['NONE'] or preds == []:
-                line = str(doc_id) + "\n"
+            if not preds or preds == ['NONE']:
+                # empty labels e.g. empty [] or empty ()
+                print(f"{doc_id}", end="\n", file=wf)
+                # line = str(doc_id) + "\n"
             else:
-                line = str(doc_id) + "\t" + "|".join(preds) + "\n"
-            wf.write(line)
+                print(f"{doc_id}\t{'|'.join(preds)}", end="\n", file=wf)
+                # line = str(doc_id) + "\t" + "|".join(preds) + "\n"
+        logger.info(f"Predictions saved to {preds_file}\n")
 
     return preds
