@@ -57,10 +57,7 @@ if __name__ == '__main__':
     )
     torch.save(model.state_dict(), './' + model_save_fname)
     # generate predictions file for evaluation script
-    generate_preds_file(
-        dr.id2label, dev_preds, preds_ids,
-        preds_file="./preds_test.txt"
-    )
+    generate_preds_file(dev_preds, preds_ids, preds_file="./preds_test.txt")
 
     eval_cmd = """$python evaluation.py \
             --ids_file='{}' \

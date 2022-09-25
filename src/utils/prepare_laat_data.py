@@ -23,6 +23,13 @@ PUNCT_TRANSLATE_UNICODE = dict.fromkeys(
 
 
 def read_doc(fname):
+    """
+
+    :param fname:
+    :type fname:
+    :return: [['tok1', 'tok2', ..., 'tokn'], ['tok1', 'tok2', ..., 'tokn'], ...]
+    :rtype: List of Lists of str
+    """
     sents = list()
     with open(fname, 'r', encoding='utf-8', errors='ignore') as rf:
         sents = process_doc(rf.read().strip())
@@ -58,7 +65,7 @@ def convert_by_vocab(vocab, items, max_seq_length=None, blank_id=0, unk_id=1):
     """Converts a sequence of [tokens|ids] using the vocab."""
     output = []
     for item in items:
-        # any work token not in vocab gets assigned unk_id by default
+        # any word token not in vocab gets assigned unk_id by default
         output.append(vocab.get(item, default=unk_id))
     if max_seq_length is not None:
         if len(output) > max_seq_length:
@@ -189,7 +196,7 @@ class DataReader:
             x = self.featurizer.convert_tokens_to_features(tokens, self.max_seq_length)
             labels = self.doc2labels[doc_id]
             y = [0] * len(self.id2label)
-            z = [2] * len(self.id2label)
+            _ = [2] * len(self.id2label)
             for label in labels:
                 if self.use_focus_concept:
                     _label, _flag = label.split('_')
@@ -201,16 +208,23 @@ class DataReader:
                     flag = 1
                 else:
                     flag = 0
-                z[lid] = flag
+                _[lid] = flag
             x = torch.tensor(x, dtype=torch.long)
             y = torch.tensor(y, dtype=torch.float)
-            z = torch.tensor(z, dtype=torch.long)
-            yield doc_id, x, y, z
+            _ = torch.tensor(_, dtype=torch.long)
+            yield doc_id, x, y, _
 
     def get_dataset(self, split):
+        """
+        Get indexable iterable of dataset split
+        :param split:
+        :type split:
+        :return: List of (doc_id, input_ids, label_ids)
+        :rtype:
+        """
         dataset = list()
-        for doc_id, input_ids, label_ids, absent_ids in self._fit_transform(split):
-            dataset.append((doc_id, input_ids, label_ids, absent_ids))
+        for doc_id, input_ids, label_ids, _ in self._fit_transform(split):
+            dataset.append((doc_id, input_ids, label_ids, _))
         return dataset
 
 
@@ -225,15 +239,15 @@ class Dataset(data.Dataset):
         return len(self.data)
 
     def __getitem__(self, index):
-        doc_id, input_ids, label_ids, absent_ids = self.data[index]
-        return input_ids.unsqueeze(0), label_ids.unsqueeze(0), absent_ids.unsqueeze(0)
+        doc_id, input_ids, label_ids, _ = self.data[index]
+        return input_ids.unsqueeze(0), label_ids.unsqueeze(0), _.unsqueeze(0)
 
     def collate_fn(data):
-        input_ids, label_ids, absent_ids = list(zip(*data))
+        input_ids, label_ids, _ = list(zip(*data))
         input_ids = torch.cat(input_ids, 0)
         label_ids = torch.cat(label_ids, 0)
-        absent_ids = torch.cat(absent_ids, 0)
-        return input_ids, label_ids, absent_ids
+        _ = torch.cat(_, 0)
+        return input_ids, label_ids, _
 
 
 def get_dataloader(dataset, batch_size, shuffle, num_workers=1):
