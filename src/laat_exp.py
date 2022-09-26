@@ -1,77 +1,156 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+DESCRIPTION: WIP
+
+@copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
+            Intelligenz GmbH or its licensors, as applicable.
+
+@author: Noon Pokaratsiri Goldstein, adapted from Saadullah Amin's LAAT implementation
+(https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/laat.py)
+
+LAAT Model as proposed by Vu et al. 2020 (https://www.ijcai.org/proceedings/2020/461)
+
+"""
 
 import torch
 import numpy as np
 import os
-import random
-import argparse
+import platform
+import sys
+from pathlib import Path
+from datetime import date
 
-from torch import optim
-from sklearn.metrics import f1_score
-from tqdm import tqdm, trange
+
+if platform.system() != 'Darwin':
+    sys.path.append(os.getcwd())  # only needed for slurm
+
 from src.models.laat import LAAT
 from src.models.train_eval_laat import train, evaluate, generate_preds_file
 from src.utils.prepare_laat_data import get_data
 
+from neptune.new.integrations.sacred import NeptuneObserver
+from sacred.observers import FileStorageObserver
+from sacred import Experiment
+import neptune.new as neptune
 
-def main(device, batch_size=16, max_seq_length=384, epochs=50, lr=0.0005, eval_only=False, use_focus_concept=True):
-    embed_matrix = np.load(os.path.join('models/word2vec', 'word2vec.guttmann.100d_mat.npy'))
-    dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size=batch_size, max_seq_length=max_seq_length)
+PROJ_FOLDER = Path(__file__).resolve().parent.parent
+SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}/{Path(__file__).stem}"
+MODEL_FOLDER = PROJ_FOLDER / "res" / f"{date.today():%y_%m_%d}"
 
-    model = LAAT(len(dr.featurizer.vocab), embed_matrix.shape[1], len(dr.id2label))
+# Step 1: Initialize Neptune and create new Neptune run
+neptune_run = neptune.init(
+    project="pokarats/LAAT",
+    api_token=os.environ.get("NEPTUNE_API_TOKEN"),
+    tags=f"{date.today():%y_%m_%d}"
+)
+
+# Step 2: Add NeptuneObserver() to your sacred experiment's observers
+ex = Experiment()
+ex.observers.append(FileStorageObserver(SAVED_FOLDER))
+ex.observers.append(NeptuneObserver(run=neptune_run))
+
+
+# Log hyperparameters
+@ex.config
+def cfg():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    batch_size = 16
+    max_seq_length = 384
+    epochs = 50
+    lr = 0.001
+    eval_only = False
+
+    embedding_npy_path = "path"
+    u = 256
+    da = 256
+    dropout = 0.3
+
+    pad_idx = 0
+    trainable = True
+
+
+@ex.post_run_hook
+def run_eval_pred():
+    pass
+
+
+@ex.main
+def run_laat(device,
+             batch_size,
+             max_seq_length,
+             epochs,
+             lr,
+             eval_only,
+             embedding_npy_path,
+             u,
+             da,
+             dropout,
+             pad_idx,
+             trainable,
+             _log,
+             _run):
+
+    embed_matrix = np.load(f"{embedding_npy_path}")
+    w2v_weights_from_np = torch.Tensor(embed_matrix)
+    dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size=batch_size,
+                                                                        max_seq_length=max_seq_length)
+
+    model = LAAT(n=len(dr.featurizer.vocab),
+                 de=embed_matrix.shape[1],
+                 L=len(dr.id2label),
+                 u=u,
+                 da=da,
+                 dropout=dropout,
+                 pad_idx=pad_idx,
+                 pre_trained_weights=w2v_weights_from_np,
+                 trainable=trainable)
+
     model = model.to(device)
     print(model)
-    model.word_embed.weight.data.copy_(torch.from_numpy(embed_matrix))
-    model_save_fname = "{}_{}.pt".format('guttmann', 'LAAT')
+    model_save_fname = f"{Path(embedding_npy_path).stem}_LAAT"
 
     if not eval_only:
-        train(
-            train_data_loader, dev_data_loader, model, epochs, lr,
-            device=device, grad_clip=None, model_save_fname=model_save_fname
-        )
+        _log.info(f"{'=' * 10}LAAT TRAINING STARTED{'=' * 10}")
+        tr_ep_num, tr_f1_scores, tr_eval_data = zip(*train(train_data_loader,
+                                                    dev_data_loader,
+                                                    model,
+                                                    epochs,
+                                                    lr,
+                                                    device=device,
+                                                    _run=_run,
+                                                    grad_clip=None,
+                                                    model_save_fname=model_save_fname))
 
-    model.load_state_dict(torch.load('./best_guttmann_LAAT.pt'))
+    _log.info(f"{'=' * 10}LAAT EVALUATION STARTED{'=' * 10}")
+    saved_model_path = MODEL_FOLDER / f'best_{model_save_fname}.pt'
+    _log.info(f"Loading best model state from {saved_model_path}")
+    model.load_state_dict(torch.load(f"{saved_model_path}"))
 
-    _, (_, preds, _, ids, _) = evaluate(test_data_loader, model, device)
+    eval_f1, test_eval_data = evaluate(test_data_loader, model, device)
+    eval_loss = test_eval_data["avg_loss"]
 
-    return model, model_save_fname, preds, ids, dr
+    if not eval_only:
+        final_tr_loss = tr_eval_data["avg_loss"]
+        final_tr_f1 = tr_f1_scores[-1]
+    else:
+        final_tr_loss = None
+        final_tr_f1 = None
 
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--use_focus_concept", action="store_true",
-        help="Whether to only consider focused concepts."
-    )
-
-    args = parser.parse_args()
-
-    import pprint
-    pprint.pprint(vars(args))
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model, model_save_fname, dev_preds, preds_ids, dr = main(
-        device=device,
-        use_focus_concept=args.use_focus_concept
-    )
-    torch.save(model.state_dict(), './' + model_save_fname)
     # generate predictions file for evaluation script
-    generate_preds_file(dev_preds, preds_ids, preds_file="./preds_test.txt")
+    exp_vers = Path(embedding_npy_path).stem
+    predicted_fp = f"{MODEL_FOLDER / f'LAAT_test_preds_{exp_vers}.txt'}"
+    generate_preds_file(test_eval_data["predicted"],
+                        test_eval_data["doc_ids"],
+                        preds_file=predicted_fp)
+    _run.add_artifact(predicted_fp, name="predicted_labels_file")
 
-    eval_cmd = """$python evaluation.py \
-            --ids_file='{}' \
-            --anns_file='{}' \
-            --dev_file='{}' \
-            --out_file='{}'"""
-    if args.use_focus_concept:
-        eval_cmd += " --use_focus_concept"
-    eval_cmd = eval_cmd.format(
-        "data/clef_format/test/ids_test.txt",
-        "data/clef_format/test/anns_test.txt" ,
-        "preds_test.txt",
-        "eval_output.txt"
-    )
-    eval_results = os.popen(eval_cmd).read()
-    print("eval results with challenge script:")
-    print(eval_results)
+    return dict(final_training_loss= final_tr_loss,
+                final_training_f1=final_tr_f1,
+                eval_loss=eval_loss,
+                eval_f1=eval_f1)
+
+
+# Step 3: Run you experiment and explore metadata in the Neptune app
+if __name__ == '__main__':
+    ex.run_commandline()

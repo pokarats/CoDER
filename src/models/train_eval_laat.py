@@ -63,7 +63,7 @@ def train(
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
 
-            for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+            for step, batch in enumerate(tqdm(train_dataloader, desc="Train Batch Iteration")):
                 batch = tuple(t.to(device) for t in batch)
                 inputs, labels = batch
 
@@ -146,7 +146,7 @@ def evaluate(dataloader, model, device, no_labels=False):
             return tensor.detach().cpu().numpy()
 
     with torch.no_grad():
-        for batch in tqdm(dataloader, desc="Eval Iteration"):
+        for batch in tqdm(dataloader, desc="Eval Batch Iteration"):
             batch = tuple(t.to(device) for t in batch)
             if no_labels:
                 b_inputs = batch
