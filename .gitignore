@@ -63,6 +63,9 @@ db.sqlite3
 instance/
 .webassets-cache
 
+#Neptune stuff
+.neptune
+
 # Scrapy stuff:
 .scrapy
 
@@ -131,4 +134,5 @@ dmypy.json
 /models
 /notes
 .idea/
+/scratch
 

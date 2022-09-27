@@ -39,6 +39,7 @@ SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}/{Path(__file
 MODEL_FOLDER = PROJ_FOLDER / "res" / f"{date.today():%y_%m_%d}"
 
 # Step 1: Initialize Neptune and create new Neptune run
+# TODO: need .env.dev file and dot_env lib to set and load api token env var
 neptune_run = neptune.init(
     project="pokarats/LAAT",
     api_token=os.environ.get("NEPTUNE_API_TOKEN"),
