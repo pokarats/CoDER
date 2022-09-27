@@ -98,7 +98,8 @@ def word_embeddings(dataset_vers,
                     n_iter=5,
                     n_workers=4,
                     save_wv_only=False,
-                    data_iterator=ProcessedIter):
+                    data_iterator=ProcessedIter,
+                    shrink_windows=False):
     """
     Updated for Gensim >= 4.0, train and save Word2Vec Model
 
@@ -132,7 +133,11 @@ def word_embeddings(dataset_vers,
         model_name = f"processed_{Path(notes_file).stem}.model"
     sentences = data_iterator
 
-    model = Word2Vec(vector_size=embedding_size, min_count=min_count, epochs=n_iter, workers=n_workers)
+    model = Word2Vec(vector_size=embedding_size,
+                     min_count=min_count,
+                     epochs=n_iter,
+                     workers=n_workers,
+                     shrink_windows=shrink_windows)
 
     _log.info(f"building word2vec vocab on {notes_file}...")
     model.build_vocab(sentences)
