@@ -127,9 +127,7 @@ class DataReader:
     def _fit_transform(self, split):
         doc_iter = self.doc_iterator(self.doc_split_path[split])
         for doc_id, doc_sents, doc_labels, doc_len in doc_iter:
-            tokens = list()
-            for each_sent in doc_sents:
-                tokens.extend(each_sent)
+            tokens = itertools.chain.from_iterable(doc_sents)
             input_ids = self.featurizer.convert_tokens_to_features(tokens, self.max_seq_length)
             self.doc2labels[doc_id] = doc_labels
             yield doc_id, input_ids, self.mlb.transform([doc_labels])
@@ -201,4 +199,10 @@ if __name__ == '__main__':
     if check_data_loader:
         _, trd, dvd, ted = get_data("../../data/mimic3", "full", "text")
         temp = iter(trd)
-        print(next(temp))
+        x, y = next(temp)
+        print(f"x shape: {x.shape}, type: {x.dtype}\n")
+        print(x)
+        print(f"y shape: {y.shape}, type: {y.dtype}\n")
+        print(y)
+
+
