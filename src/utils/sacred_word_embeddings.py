@@ -169,16 +169,39 @@ def default_cfg():
 
     # data directory and file organization
     data_dir = PROJ_FOLDER / "data"
-    version = '50'
+    version = 'full'
+
+    mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
+
+    # corpus_readers Iterator params
+    iter_params = {"filename": str(mimic_dir / f"disch_{version}.csv"),
+                   "slice_pos": 3}
+
+    # gensim.models.Word2Vec params, captured func
+    dataset_vers = version
+    notes_file = iter_params["filename"]
+    embedding_size = 100
+    min_count = 0
+    n_iter = 5
+    n_workers = 4
+    save_wv_only = False
+    data_iterator = MimicIter(**iter_params)
+    pruned = False
+    normed = False  # whether to also save L2-normed vectors as embeddings
+
+@ex.named_config
+def train_only():
+    """Configs for Processing MIMIC-III text with only train partition"""
+
+    # data directory and file organization
+    data_dir = PROJ_FOLDER / "data"
+    version = 'full'
 
     mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
 
     # corpus_readers Iterator params
     iter_params = {"filename": str(mimic_dir / f"train_{version}.csv"),
-                   "slice_pos": 2,
-                   "threshold": 0.7,
-                   "pruned": False,
-                   "discard_cuis_file": None}
+                   "slice_pos": 2}
 
     # gensim.models.Word2Vec params, captured func
     dataset_vers = version
@@ -189,7 +212,7 @@ def default_cfg():
     n_workers = 4
     save_wv_only = False
     data_iterator = MimicIter(notes_file)
-    pruned = iter_params["pruned"]
+    pruned = False
     normed = False  # whether to also save L2-normed vectors as embeddings
 
 
@@ -199,7 +222,7 @@ def cui():
 
     # data directory and file organization
     data_dir = PROJ_FOLDER / "data"
-    version = '50'
+    version = 'full'
 
     mimic_dir = Path(data_dir) / "linked_data" / f"{version}"
 
