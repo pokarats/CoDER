@@ -64,7 +64,7 @@ def train(
             nb_tr_examples, nb_tr_steps = 0, 0
 
             for step, batch in enumerate(tqdm(train_dataloader, desc="Train Batch Iteration")):
-                batch = tuple(t.to(device) for t in batch)
+                batch = tuple(tensor.to(device) for tensor in batch)
                 inputs, labels = batch
 
                 labels_logits, labels_loss = model(inputs, labels)
@@ -147,23 +147,24 @@ def evaluate(dataloader, model, device, no_labels=False):
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Eval Batch Iteration"):
-            batch = tuple(t.to(device) for t in batch)
+            batch = tuple(tensor.to(device) for tensor in batch)
             if no_labels:
                 b_inputs = batch
             else:
-                b_inputs, b_labels = batch
+                b_inputs, b_labels = batch  # b_inputs torch.int64, b_labels torch.float32
 
             if not no_labels:
-                b_labels_logits, b_labels_loss = model(b_inputs, b_labels.float())
+                b_labels_logits, b_labels_loss = model(b_inputs, b_labels)
                 avg_loss += b_labels_loss.item()
             else:
                 b_labels_logits = model(b_inputs)
 
+            # predicted labels dtype int
             b_labels_preds = (torch.sigmoid(b_labels_logits).detach().cpu().numpy() >= 0.5).astype(int)
             b_labels_logits = detach(b_labels_logits, float)
 
             if not no_labels:
-                b_labels = detach(b_labels, int)
+                b_labels = detach(b_labels, int)  # detached labels dtype int
 
             labels_preds = append(labels_preds, b_labels_preds)
             labels_logits = append(labels_logits, b_labels_logits)
@@ -187,10 +188,12 @@ def evaluate(dataloader, model, device, no_labels=False):
     else:
         score = 0.
         eval_data = {"logits": labels_logits,
-                        "predicted": mlb.inverse_transform(labels_preds),
-                        "true_labels": None,
-                        "doc_ids": dataset_doc_ids,
-                        "avg_loss": avg_loss}
+                     "predicted": mlb.inverse_transform(labels_preds),
+                     "true_labels": None,
+                     "doc_ids": dataset_doc_ids,
+                     "avg_loss": avg_loss}
+
+        # score = micro f1
         return score, eval_data
 
     eval_data = {"logits": labels_logits,
