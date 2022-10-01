@@ -7,6 +7,7 @@ import json
 import torch
 import torch.utils.data as data
 import itertools
+from operator import itemgetter
 from torch.nn.utils.rnn import pad_sequence
 
 from pathlib import Path
@@ -40,17 +41,6 @@ def convert_ids_to_tokens(inv_vocab, ids):
     return convert_by_vocab(inv_vocab, ids)
 
 
-def mimic_collate_fn(dataset_batch):
-    input_ids, label_ids = list(zip(*dataset_batch))
-    input_ids = list(map(torch.LongTensor, input_ids))  # dtype: torch.int64
-    label_ids = list(map(torch.Tensor, label_ids))  # dtype: torch.float32
-
-    padded_input_ids = pad_sequence(input_ids, batch_first=True)  # shape: batch_size x max_seq_len in batch
-    label_ids = torch.cat(label_ids, dim=0)  # shape: batch_size x num label classes
-
-    return padded_input_ids, label_ids
-
-
 class Features:
 
     def __init__(self, vocab, unk_token="<UNK>", pad_token="<PAD>"):
@@ -76,41 +66,60 @@ class DataReader:
                  data_dir="../../data/mimic3",
                  version="full",
                  input_type="text",
+                 prune_cui=False,
+                 cui_prune_file=None,
                  vocab_fn="processed_train_full.json",
-                 doc_iterator=MimicDocIter,
-                 max_seq_length=4000):
+                 max_seq_length=4000,
+                 doc_iterator=None,
+                 umls_iterator=None):
         self.data_dir = Path(data_dir) / f"{version}"
-        self.w2v_dir = self.data_dir / "model"
+        self.linked_data_dir = self.data_dir.parent.parent / "linked_data" / f"{version}" \
+            if input_type == "umls" else None
+        self.w2v_dir = self.data_dir / "model" if input_type == "text" else self.linked_data_dir / "model"
+        self.input_type = input_type
 
         # data file paths
+        # if input_type == "text":
         # TODO: extend this to also cover clef file format
         self.train_file = self.data_dir / f"train_{version}.csv"
         self.dev_file = self.data_dir / f"dev_{version}.csv"
         self.test_file = self.data_dir / f"test_{version}.csv"
+        self.doc_iterator = MimicDocIter if doc_iterator is None else doc_iterator
         self.doc_split_path = dict(train=self.train_file, dev=self.dev_file, test=self.test_file)
 
-        # get all labels and fit MultiLabelBinarizer
-        self.doc_iterator = doc_iterator
+        # get labels from all partitions and fit MultiLabelBinarizer
         all_labels_iter = itertools.chain(self.doc_iterator(self.train_file, slice_pos=3),
                                           self.doc_iterator(self.dev_file, slice_pos=3),
                                           self.doc_iterator(self.test_file, slice_pos=3))
         self.mlb = MultiLabelBinarizer()
         self.mlb.fit(all_labels_iter)
-        # self.id2label = {k: v for k, v in enumerate(self.mlb.classes_)}
 
-        # input to feature id
+        # if cui as input, get umls file paths for getting doc texts, id, len
+        # id and labels will still come from .csv text file
+        if self.input_type == "umls":
+            self.prune_cui = prune_cui
+            self.cui_prune_file = cui_prune_file
+            self.umls_train_file = self.linked_data_dir / f"train_{version}_{input_type}.txt"
+            self.umls_dev_file = self.linked_data_dir / f"dev_{version}_{input_type}.txt"
+            self.umls_test_file = self.linked_data_dir / f"test_{version}_{input_type}.txt"
+            self.umls_doc_iterator = MimicCuiDocIter if doc_iterator is None else doc_iterator
+            self.umls_doc_split_path = dict(train=self.umls_train_file,
+                                            dev=self.umls_dev_file,
+                                            test=self.umls_test_file)
+
+        # load input to feature word 2 id vocab json saved from word_embedding step
         if input_type == "text":
             try:
-                vocab_fname = self.w2v_dir / ("processed_full.json" if vocab_fn is None else vocab_fn)
+                vocab_fname = self.w2v_dir / (f"processed_full_{input_type}.json" if vocab_fn is None else vocab_fn)
             except FileNotFoundError:
                 print(f"No vocab file, making word to index dict from vocab...")
                 # TODO: make_vocab_dict function from vocab.csv
                 # for now error exit
                 sys.exit(1)
 
-        elif input_type == "cui":
+        elif input_type == "umls":
             try:
-                vocab_fname = self.w2v_dir / ("processed_full_umls.json" if vocab_fn is None else vocab_fn)
+                vocab_fname = self.w2v_dir / (f"processed_full_{input_type}.json" if vocab_fn is None else vocab_fn)
             except FileNotFoundError:
                 print(f"No vocab file, making word to index dict from vocab...")
                 # TODO: make_vocab_dict function from cui_vocab file
@@ -118,6 +127,7 @@ class DataReader:
                 sys.exit(1)
         else:
             raise ValueError(f"Invalid input_type option!")
+
         self.featurizer = Features(json.load(open(f"{vocab_fname}")))
         self.max_seq_length = max_seq_length
 
@@ -125,15 +135,40 @@ class DataReader:
         self.split_stats = dict(train=dict(), dev=dict(), test=dict())
 
     def _fit_transform(self, split):
-        doc_iter = self.doc_iterator(self.doc_split_path[split])
-        for doc_id, doc_sents, doc_labels, doc_len in doc_iter:
-            tokens = itertools.chain.from_iterable(doc_sents)
-            input_ids = self.featurizer.convert_tokens_to_features(tokens, self.max_seq_length)
-            self.doc2labels[doc_id] = doc_labels
-            yield doc_id, input_ids, self.mlb.transform([doc_labels])
+        if self.input_type == "text":
+            text_doc_iter = self.doc_iterator(self.doc_split_path[split])
+            for doc_id, doc_sents, doc_labels, doc_len in text_doc_iter:
+                tokens = itertools.chain.from_iterable(doc_sents)
+                input_ids = self.featurizer.convert_tokens_to_features(tokens, self.max_seq_length)
+                self.doc2labels[doc_id] = doc_labels
+                yield doc_id, input_ids, self.mlb.transform([doc_labels])
+
+        elif self.input_type == "umls":
+            umls_doc_iter = self.umls_doc_iterator(self.umls_doc_split_path[split],
+                                                   threshold=0.7,
+                                                   pruned=self.prune_cui,
+                                                   discard_cuis_file=self.cui_prune_file)
+            text_id_iter = self.doc_iterator(self.doc_split_path[split], slice_pos=0)
+            text_lab_iter = self.doc_iterator(self.doc_split_path[split], slice_pos=3)
+            for doc_id, (umls_data), doc_labels in zip(text_id_iter, umls_doc_iter, text_lab_iter):
+                u_id, u_sents, u_len = umls_data
+                tokens = itertools.chain.from_iterable(u_sents)
+                input_ids = self.featurizer.convert_tokens_to_features(tokens, self.max_seq_length)
+                self.doc2labels[doc_id] = doc_labels
+                yield doc_id, input_ids, self.mlb.transform([doc_labels])
+        else:
+            raise ValueError(f"Invalid input_type option!")
 
     def get_dataset_stats(self, split):
-        doc_lens = list(map(int, self.doc_iterator(self.doc_split_path[split], slice_pos=4)))
+        if self.split_stats[split].get('mean') is not None:
+            return self.split_stats[split]
+
+        if self.input_type == "text":
+            doc_lens = list(map(int, self.doc_iterator(self.doc_split_path[split], slice_pos=4)))
+        elif self.input_type == "umls":
+            doc_lens = list(map(int, [doc_data[2] for doc_data in
+                                      self.umls_doc_iterator(self.umls_doc_split_path[split])]))
+
         self.split_stats[split]['min'] = np.min(doc_lens)
         self.split_stats[split]['max'] = np.max(doc_lens)
         self.split_stats[split]['mean'] = np.mean(doc_lens)
@@ -148,10 +183,8 @@ class DataReader:
         :return: List of (doc_id, input_ids, binarized_labels)
         :rtype:
         """
-        dataset = list()
-        for doc_id, input_ids, labels_bin in self._fit_transform(split):
-            dataset.append((doc_id, input_ids, labels_bin))
-        return dataset
+
+        return list(self._fit_transform(split))
 
 
 class Dataset(data.Dataset):
@@ -168,8 +201,19 @@ class Dataset(data.Dataset):
         doc_id, input_ids, labels_bin = self.data[index]
         return input_ids, labels_bin
 
+    @staticmethod
+    def mimic_collate_fn(dataset_batch):
+        input_ids, label_ids = list(zip(*dataset_batch))
+        input_ids = list(map(torch.LongTensor, input_ids))  # dtype: torch.int64
+        label_ids = list(map(torch.Tensor, label_ids))  # dtype: torch.float32
 
-def get_dataloader(dataset, batch_size, shuffle, collate_fn=mimic_collate_fn, num_workers=1):
+        padded_input_ids = pad_sequence(input_ids, batch_first=True)  # shape: batch_size x max_seq_len in batch
+        label_ids = torch.cat(label_ids, dim=0)  # shape: batch_size x num label classes
+
+        return padded_input_ids, label_ids
+
+
+def get_dataloader(dataset, batch_size, shuffle, collate_fn=Dataset.mimic_collate_fn, num_workers=1):
     data_loader = data.DataLoader(
         dataset=dataset,
         batch_size=batch_size,
@@ -181,8 +225,8 @@ def get_dataloader(dataset, batch_size, shuffle, collate_fn=mimic_collate_fn, nu
     return data_loader
 
 
-def get_data(data_dir, version, input_type, doc_iterator=MimicDocIter, batch_size=8, max_seq_length=4000):
-    dr = DataReader(data_dir, version, input_type, "processed_train_full.json", doc_iterator, max_seq_length)
+def get_data(batch_size=8, **kwargs):
+    dr = DataReader(**kwargs)
     train_data_loader = get_dataloader(Dataset(dr.get_dataset('train'), dr.mlb), batch_size, True)
     dev_data_loader = get_dataloader(Dataset(dr.get_dataset('dev'), dr.mlb), batch_size, False)
     test_data_loader = get_dataloader(Dataset(dr.get_dataset('test'), dr.mlb), batch_size, False)
@@ -190,14 +234,25 @@ def get_data(data_dir, version, input_type, doc_iterator=MimicDocIter, batch_siz
 
 
 if __name__ == '__main__':
-    check_data_reader = False
+    check_data_reader = True
     if check_data_reader:
-        dr = DataReader()
-        iter_train = iter(dr.get_dataset('train'))
-        print(next(iter_train))
+        data_reader = DataReader(data_dir="../../data/mimic3",
+                                 version="50",
+                                 input_type="umls",
+                                 prune_cui=False,
+                                 cui_prune_file=None,
+                                 vocab_fn="processed_train_full_umls.json")
+        d_id, x, y = data_reader.get_dataset('train')[0]
+        print(f"id: {d_id}, x: {x}\n, y: {y}")
     check_data_loader = True
     if check_data_loader:
-        _, trd, dvd, ted = get_data("../../data/mimic3", "full", "text")
+        dr, trd, dvd, ted = get_data(batch_size=8,
+                                     data_dir="../../data/mimic3",
+                                     version="50",
+                                     input_type="umls",
+                                     prune_cui=False,
+                                     cui_prune_file=None,
+                                     vocab_fn="processed_train_full_umls.json")
         temp = iter(trd)
         x, y = next(temp)
         print(f"x shape: {x.shape}, type: {x.dtype}\n")
@@ -205,4 +260,7 @@ if __name__ == '__main__':
         print(f"y shape: {y.shape}, type: {y.dtype}\n")
         print(y)
 
+    #dr = DataReader(data_dir="../../data/mimic3", version="full", input_type="text")
+        print(dr.get_dataset_stats('train'))
 
+        print(np.transpose(np.nonzero(y)))
