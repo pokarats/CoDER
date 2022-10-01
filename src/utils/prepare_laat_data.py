@@ -7,7 +7,6 @@ import json
 import torch
 import torch.utils.data as data
 import itertools
-from operator import itemgetter
 from torch.nn.utils.rnn import pad_sequence
 
 from pathlib import Path
@@ -98,11 +97,12 @@ class DataReader:
         # id and labels will still come from .csv text file
         if self.input_type == "umls":
             self.prune_cui = prune_cui
-            self.cui_prune_file = cui_prune_file
+            self.cui_prune_file = self.linked_data_dir / (f"{version}_cuis_to_discard.pickle" if cui_prune_file is None
+                                                          else cui_prune_file)
             self.umls_train_file = self.linked_data_dir / f"train_{version}_{input_type}.txt"
             self.umls_dev_file = self.linked_data_dir / f"dev_{version}_{input_type}.txt"
             self.umls_test_file = self.linked_data_dir / f"test_{version}_{input_type}.txt"
-            self.umls_doc_iterator = MimicCuiDocIter if doc_iterator is None else doc_iterator
+            self.umls_doc_iterator = MimicCuiDocIter if umls_iterator is None else umls_iterator
             self.umls_doc_split_path = dict(train=self.umls_train_file,
                                             dev=self.umls_dev_file,
                                             test=self.umls_test_file)
@@ -168,6 +168,8 @@ class DataReader:
         elif self.input_type == "umls":
             doc_lens = list(map(int, [doc_data[2] for doc_data in
                                       self.umls_doc_iterator(self.umls_doc_split_path[split])]))
+        else:
+            raise ValueError(f"Invalid input_type option!")
 
         self.split_stats[split]['min'] = np.min(doc_lens)
         self.split_stats[split]['max'] = np.max(doc_lens)
@@ -239,7 +241,7 @@ if __name__ == '__main__':
         data_reader = DataReader(data_dir="../../data/mimic3",
                                  version="50",
                                  input_type="umls",
-                                 prune_cui=False,
+                                 prune_cui=True,
                                  cui_prune_file=None,
                                  vocab_fn="processed_train_full_umls.json")
         d_id, x, y = data_reader.get_dataset('train')[0]
@@ -250,7 +252,7 @@ if __name__ == '__main__':
                                      data_dir="../../data/mimic3",
                                      version="50",
                                      input_type="umls",
-                                     prune_cui=False,
+                                     prune_cui=True,
                                      cui_prune_file=None,
                                      vocab_fn="processed_train_full_umls.json")
         temp = iter(trd)
@@ -260,7 +262,7 @@ if __name__ == '__main__':
         print(f"y shape: {y.shape}, type: {y.dtype}\n")
         print(y)
 
-    #dr = DataReader(data_dir="../../data/mimic3", version="full", input_type="text")
+    # dr = DataReader(data_dir="../../data/mimic3", version="full", input_type="text")
         print(dr.get_dataset_stats('train'))
 
         print(np.transpose(np.nonzero(y)))

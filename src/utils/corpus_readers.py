@@ -18,7 +18,11 @@ https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/word2vec.py
 
 from abc import ABC, abstractmethod
 import csv
-import pickle
+import platform
+if platform.python_version() < "3.8":
+    import pickle5 as pickle
+else:
+    import pickle
 import json
 from collections import deque
 
