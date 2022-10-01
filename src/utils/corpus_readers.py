@@ -20,7 +20,7 @@ from abc import ABC, abstractmethod
 import csv
 import pickle
 import json
-from collections import deque, OrderedDict
+from collections import deque
 
 
 class BaseIter(ABC):
@@ -158,7 +158,7 @@ class MimicDocIter(MimicIter):
                 doc_sents = [[w for w in sent.split() if w != self.cls] for sent in
                                     row[2].split(self.sep) if sent]
                 doc_labels = row[3].split(';')
-                doc_len = row[-1]
+                doc_len = row[4]
                 if self.slice_pos is None:
                     yield doc_id, doc_sents, doc_labels, doc_len
                 else:
@@ -183,12 +183,12 @@ class MimicCuiDocIter(MimicCuiIter):
     def __init__(self, filename, threshold=0.7, pruned=False, discard_cuis_file=None):
         super().__init__(filename, threshold, pruned, discard_cuis_file)
         # attributes to facilitate generator, not meant to be accessible
-        self._doc_ids = deque()
-        self._doc_sents = None
-        self._doc_len = 0
 
     def __iter__(self):
         with open(self.filename) as rf:
+            doc_ids = deque()
+            doc_sents = None
+            doc_len = 0
             for line in rf:
                 line = line.strip()
                 if not line:
@@ -196,24 +196,24 @@ class MimicCuiDocIter(MimicCuiIter):
                 line = json.loads(line)
                 uid = list(line.keys())[0]
                 doc_id, sent_id = list(map(int, uid.split("_")))
-                if doc_id not in self._doc_ids:
+                if doc_id not in doc_ids:
                     # first sent in doc
-                    self._doc_ids.append(doc_id)
+                    doc_ids.append(doc_id)
 
                     # if this is the start of a new doc, yield the doc sentences in the last doc
-                    if self._doc_sents is not None:
-                        doc_sents = self._doc_sents
-                        doc_len = str(self._doc_len)
+                    if doc_sents is not None:
+                        temp_doc_sents = doc_sents
+                        temp_doc_len = str(doc_len)
 
                         # reset for next doc
-                        self._doc_sents = None
-                        self._doc_len = 0
+                        doc_sents = None
+                        doc_len = 0
 
                         # yield last doc id, text, len
-                        yield self._doc_ids.popleft(), doc_sents, doc_len
+                        yield doc_ids.popleft(), temp_doc_sents, temp_doc_len
 
                     # start of a new doc (this could also be first doc in dataset)
-                    self._doc_sents = []
+                    doc_sents = []
                 cui_sent_tokens = [ents[0] for item in line[uid] for ents in item['umls_ents'] if float(ents[-1]) >
                                    self.confidence_threshold]
 
@@ -226,11 +226,31 @@ class MimicCuiDocIter(MimicCuiIter):
                     # if empty after pruning, skip
                     if not pruned_cui_sent_tokens:
                         continue
-                    self._doc_len += len(pruned_cui_sent_tokens)
-                    self._doc_sents.append(pruned_cui_sent_tokens)
+                    doc_len += len(pruned_cui_sent_tokens)
+                    doc_sents.append(pruned_cui_sent_tokens)
                 else:
-                    self._doc_sents.append(cui_sent_tokens)
-                    self._doc_len += len(cui_sent_tokens)
+                    doc_sents.append(cui_sent_tokens)
+                    doc_len += len(cui_sent_tokens)
             # after end of last sentence in file, yield the last doc
-            if self._doc_sents is not None and self._doc_len > 0 and self._doc_ids:
-                yield self._doc_ids.popleft(), self._doc_sents, self._doc_len
+            if doc_sents is not None and doc_len > 0 and doc_ids:
+                yield doc_ids.popleft(), doc_sents, doc_len
+
+
+if __name__ == '__main__':
+    cui_doc_iter = MimicCuiDocIter("../../data/linked_data/50/dev_50_umls.txt")
+    mimic_doc_iter = MimicDocIter("../../data/mimic3/50/dev_50.csv")
+
+    dev_set_cui_docs = list(cui_doc_iter)
+    dev_set_docs = list(mimic_doc_iter)
+    print(f"num cui docs: {len(dev_set_cui_docs)}")
+    print(f"num csv docs: {len(dev_set_docs)}")
+
+    cui_id, cui_sents, cui_len = dev_set_cui_docs[-1]
+    print(f"cui last doc id: {cui_id}"
+          f"cui last docs: {cui_sents}\n"
+          f"cui las doc len: {cui_len}\n")
+
+    dev_id, sents, labels, dev_len = dev_set_docs[-1]
+    print(f"dev last doc id: {dev_id}"
+          f"dev last docs: {sents}\n"
+          f"dev las doc len: {dev_len}\n")
