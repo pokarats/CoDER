@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # make sure only first task per node installs stuff, others wait
-DONEFILE="netscratch/pokarats/tmp/install_done_${SLURM_JOBID}"
+DONEFILE="/netscratch/pokarats/tmp/install_done_${SLURM_JOBID}"
 PYVERSION="$(python -V 2>&1 | grep -o '3\.\d*')"
 if [[ $SLURM_LOCALID == 0 ]]; then
     if [[ $PYVERSION < 3.8 ]]; then
