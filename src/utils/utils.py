@@ -1,18 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: utitly functions used in concepts_pruning.py, baseline_models.py, etc.
+DESCRIPTION: utitly functions used in concepts_pruning.py, baseline_models.py, sacred_word_embeddings.py, etc.
              The logger writes to a hidden folder './log/'
              and uses the name of this file, followed by the date (by default). The argument parser comes with a default
-             option --quiet to keep the stdout clean.
-
-@copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
-            Intelligenz GmbH or its licensors, as applicable.
+             option --quiet to keep the stdout clean. (if run from main with logger config, otherwise cout.txt in
+             Sacred logging)
 
 @author: Noon Pokaratsiri Goldstein
 """
 import json
-import pickle
+import platform
+if platform.python_version() < "3.8":
+    import pickle5 as pickle
+else:
+    import pickle
 import logging
 import pandas as pd
 import matplotlib.pyplot as plt

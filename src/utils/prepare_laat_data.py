@@ -1,4 +1,12 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+DESCRIPTION: prepare Dataloader for LAAT model for MIMIC-III text and umls input versions.
+
+@author: Noon Pokaratsiri Goldstein
+
+Adapted from code base from: https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/utils.py
+"""
 
 import sys
 import os
@@ -74,7 +82,7 @@ class DataReader:
         self.data_dir = Path(data_dir) / f"{version}"
         self.linked_data_dir = self.data_dir.parent.parent / "linked_data" / f"{version}" \
             if input_type == "umls" else None
-        self.w2v_dir = self.data_dir / "model" if input_type == "text" else self.linked_data_dir / "model"
+        self.w2v_dir = (Path(data_dir) / "model") if input_type == "text" else (self.linked_data_dir.parent / "model")
         self.input_type = input_type
 
         # data file paths
@@ -108,29 +116,20 @@ class DataReader:
                                             test=self.umls_test_file)
 
         # load input to feature word 2 id vocab json saved from word_embedding step
-        if input_type == "text":
-            try:
-                vocab_fname = self.w2v_dir / (f"processed_full_{input_type}.json" if vocab_fn is None else vocab_fn)
-            except FileNotFoundError:
-                print(f"No vocab file, making word to index dict from vocab...")
-                # TODO: make_vocab_dict function from vocab.csv
-                # for now error exit
-                sys.exit(1)
+        # file name convention for .json from word_embedding step same for umls and text versions
+        try:
+            vocab_fname = self.w2v_dir / (f"processed_full_{input_type}_pruned.json" if vocab_fn is None else vocab_fn)
+        except FileNotFoundError:
+            print(f"No vocab file, NEED to make word to index dict from vocab...")
+            # TODO: make_vocab_dict function from vocab.csv or cui vocab file
+            # for now error exit
+            sys.exit(1)
 
-        elif input_type == "umls":
-            try:
-                vocab_fname = self.w2v_dir / (f"processed_full_{input_type}.json" if vocab_fn is None else vocab_fn)
-            except FileNotFoundError:
-                print(f"No vocab file, making word to index dict from vocab...")
-                # TODO: make_vocab_dict function from cui_vocab file
-                # for now error exit
-                sys.exit(1)
-        else:
-            raise ValueError(f"Invalid input_type option!")
-
+        # load json vocab mapping word to indx, tokens not in vocab will be replaced with unk token
         self.featurizer = Features(json.load(open(f"{vocab_fname}")))
         self.max_seq_length = max_seq_length
 
+        # store doc_id to labels and split stats: min, max, mean num tokens/doc
         self.doc2labels = dict()
         self.split_stats = dict(train=dict(), dev=dict(), test=dict())
 
@@ -243,7 +242,7 @@ if __name__ == '__main__':
                                  input_type="umls",
                                  prune_cui=True,
                                  cui_prune_file=None,
-                                 vocab_fn="processed_train_full_umls.json")
+                                 vocab_fn="processed_full_umls_pruned.json")
         d_id, x, y = data_reader.get_dataset('train')[0]
         print(f"id: {d_id}, x: {x}\n, y: {y}")
     check_data_loader = True
@@ -254,7 +253,7 @@ if __name__ == '__main__':
                                      input_type="umls",
                                      prune_cui=True,
                                      cui_prune_file=None,
-                                     vocab_fn="processed_train_full_umls.json")
+                                     vocab_fn="processed_full_umls_pruned.json")
         temp = iter(trd)
         x, y = next(temp)
         print(f"x shape: {x.shape}, type: {x.dtype}\n")

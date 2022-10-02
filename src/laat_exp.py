@@ -146,7 +146,7 @@ def run_laat(device,
                         preds_file=predicted_fp)
     _run.add_artifact(predicted_fp, name="predicted_labels_file")
 
-    return dict(final_training_loss= final_tr_loss,
+    return dict(final_training_loss=final_tr_loss,
                 final_training_f1=final_tr_f1,
                 eval_loss=eval_loss,
                 eval_f1=eval_f1)
