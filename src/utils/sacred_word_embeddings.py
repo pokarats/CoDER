@@ -172,10 +172,10 @@ def word_embeddings(_log, version, input_type, data_iterator, notes_file, slice_
 
     model = Word2Vec(**kwargs)
 
-    _log.info(f"building word2vec vocab on (files from) {notes_file}...")
+    _log.info(f"Building word2vec vocab on {input_type} files from {notes_file}...")
     model.build_vocab(sentences)
 
-    _log.info(f"training on {model.corpus_count} sentences over {model.epochs} iterations...")
+    _log.info(f"Training on {model.corpus_count} sentences over {model.epochs} iterations...")
     model.train(sentences, total_examples=model.corpus_count, epochs=model.epochs)
 
     if notes_file_path.is_file():
@@ -195,11 +195,11 @@ def word_embeddings(_log, version, input_type, data_iterator, notes_file, slice_
         out_file = embedding_dir / f"{out_file.stem}.wordvectors"
         _log.info(f"only KeyedVectors are saved to {out_file}!! This is no longer trainable!!")
         model_wv = model.wv
-        model_wv.save(out_file)
+        model_wv.save(str(out_file))
         return out_file
 
     model.save(str(out_file))
-    return str(out_file)
+    return out_file
 
 
 @ex.config
@@ -234,7 +234,7 @@ def default_cfg():
 
 
 @ex.named_config
-def train_only(w2v_params, wem_params, gen_npy_params):
+def train_only():
     """Configs for Processing MIMIC-III text with only train partition"""
 
     # data directory and file organization
@@ -243,14 +243,14 @@ def train_only(w2v_params, wem_params, gen_npy_params):
     mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
 
     # word_embedding func params
-    wem_params["notes_file"] = str(mimic_dir / f"train_{version}.csv")
-    wem_params["slice_pos"] = 2
+    wem_params = dict(notes_file=str(mimic_dir / f"train_{version}.csv"),
+                      slice_pos=2)
 
-    # gensim_to_npy func params
+    # gensim_to_npy func params, use default values
 
 
 @ex.named_config
-def cui(wem_params, w2v_params, gen_npy_params):
+def cui():
     """Baseline configs for Embedding CUIs as input tokens"""
 
     # data directory and file organization
@@ -258,19 +258,13 @@ def cui(wem_params, w2v_params, gen_npy_params):
     version = "full"
     mimic_dir = Path(data_dir) / "linked_data" / f"{version}"
 
-    # corpus_readers Iterator params
-    iter_params = dict(notes_file=str(mimic_dir),
-                       slice_pos=None)
     # word_embedding func params
-    wem_params["version"] = version
-    wem_params["input_type"] = "umls"
-    wem_params["data_iterator"] = MimicCuiIter
-    wem_params["notes_file"] = str(mimic_dir)
-    wem_params["slice_pos"] = None
-    wem_params["save_wv_only"] = False
+    wem_params = dict(input_type="umls",
+                      data_iterator=MimicCuiIter,
+                      notes_file=str(mimic_dir))
 
     # gensim_to_npy func params
-    gen_npy_params["prune_file"] = mimic_dir / f"{version}_cuis_to_discard.pickle"
+    gen_npy_params = dict(prune_file=mimic_dir / f"{version}_cuis_to_discard.pickle")
 
 
 @ex.main
