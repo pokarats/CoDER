@@ -53,11 +53,26 @@ def lines_from_file(file_path, delimiter="|"):
 
     :param file_path: path to file
     :param delimiter: token type on which to split each line
-    :return: each line with trailing whitespaces removed
+    :return: each line with trailing whitespaces removed and split on delimiter
     """
     with open(file_path) as f:
         for line in f:
             yield line.rstrip().split(delimiter)
+
+
+def whole_lines_from_file(file_path):
+    """
+    Yield line from file path with whitespaces removed
+
+    :param file_path: path to file
+    :param delimiter: token type on which to split each line
+    :return: each line with whitespaces removed
+    """
+    with open(file_path) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                yield line
 
 
 def pickle_obj(obj_to_pickle, args_cl, which_pickle):
