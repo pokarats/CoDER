@@ -21,29 +21,26 @@ import sys
 from pathlib import Path
 from datetime import date
 
-
 if platform.system() != 'Darwin':
     sys.path.append(os.getcwd())  # only needed for slurm
 
-from src.models.laat import LAAT
-from src.models.train_eval_laat import train, evaluate, generate_preds_file
-from src.utils.prepare_laat_data import get_data
-
+from models.laat import LAAT
+from models.train_eval_laat import train, evaluate, generate_preds_file
+from utils.prepare_laat_data import get_data
+from utils.config import PROJ_FOLDER, MODEL_FOLDER, DEV_API_KEY
 from neptune.new.integrations.sacred import NeptuneObserver
 from sacred.observers import FileStorageObserver
 from sacred import Experiment
 import neptune.new as neptune
 
-PROJ_FOLDER = Path(__file__).resolve().parent.parent
+
 SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}/{Path(__file__).stem}"
-MODEL_FOLDER = PROJ_FOLDER / "res" / f"{date.today():%y_%m_%d}"
 
 # Step 1: Initialize Neptune and create new Neptune run
-# TODO: need .env.dev file and dot_env lib to set and load api token env var
 neptune_run = neptune.init(
     project="pokarats/LAAT",
-    api_token=os.environ.get("NEPTUNE_API_TOKEN"),
-    tags=f"{date.today():%y_%m_%d}"
+    api_token=DEV_API_KEY,
+    tags=f"dummy_{date.today():%y_%m_%d}"
 )
 
 # Step 2: Add NeptuneObserver() to your sacred experiment's observers
@@ -52,23 +49,100 @@ ex.observers.append(FileStorageObserver(SAVED_FOLDER))
 ex.observers.append(NeptuneObserver(run=neptune_run))
 
 
-# Log hyperparameters
+@ex.capture
+def load_model(_log,
+               embedding_path,
+               batch_size,
+               dr_params,
+               laat_params):
+
+    _log.info(f"Loading pre_trained embedding weights from {embedding_path}")
+    embed_matrix = np.load(f"{embedding_path}")
+    w2v_weights_from_np = torch.Tensor(embed_matrix)
+
+    dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size,
+                                                                        **dr_params)
+    _log.info(f"Vocab size: {len(dr.featurizer.vocab)}\n"
+              f"Embedding Dim: {embed_matrix.shape[1]}\n"
+              f"Num Labels: {len(dr.mlb.classes_)}\n")
+    laat_params = {"n": len(dr.featurizer.vocab),
+                   "de": embed_matrix.shape[1],
+                   "L": len(dr.mlb.classes_),
+                   "pre_trained_weights": w2v_weights_from_np,
+                   **laat_params}
+
+    model = LAAT(**laat_params)
+
+    return model, train_data_loader, dev_data_loader, test_data_loader
+
+
+# Sacred logging parameters
 @ex.config
-def cfg():
+def text_cfg():
+    """Default params for training on 50/full MIMIC-III text datasets"""
+    # Directory and data organization
+    # data directory and file organization
+    data_dir = PROJ_FOLDER / "data"
+    version = "full"
+    input_type = "text"
+    mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
+    model_dir = Path(mimic_dir).parent / "model"
+
+    # Pytorch hyperparameters
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    batch_size = 16
-    max_seq_length = 384
     epochs = 50
     lr = 0.001
     eval_only = False
 
-    embedding_npy_path = "path"
-    u = 256
-    da = 256
-    dropout = 0.3
+    # load model params are separate into sections below
+    batch_size = 16
+    embedding_path = model_dir / f"processed_full_{input_type}_pruned.npy"
 
-    pad_idx = 0
-    trainable = True
+    # LAAT model params, n, de, L, pre_trained_weights defined in load_model captured function
+    laat_params = dict(u=256,
+                       da=256,
+                       dropout=0.3,
+                       pad_idx=0,
+                       trainable=True)
+
+    # DataReader class params, first arg is batch_size
+    dr_params = dict(data_dir="data/mimic3",
+                     version="full",
+                     input_type="text",
+                     prune_cui=False,
+                     cui_prune_file=None,
+                     vocab_fn="processed_full_text_pruned.json",
+                     max_seq_length=4000,
+                     doc_iterator=None,
+                     umls_iterator=None)
+
+
+@ex.named_config
+def dummy_cfg():
+    """Dummy params for testing on dummy MIMIC-III text datasets"""
+    # Directory and data organization
+    # data directory and file organization
+    data_dir = PROJ_FOLDER / "data"
+    version = "dummy"
+    input_type = "text"
+    mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
+    model_dir = Path(mimic_dir).parent / "model"
+
+    # Pytorch hyperparameters
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    epochs = 2
+    lr = 0.001
+    eval_only = False
+
+    # load model params are separate into sections below
+    batch_size = 2
+
+    # LAAT model params, n, de, L, pre_trained_weights defined in load_model captured function
+    # unchanged
+
+    # DataReader class params, first arg is batch_size
+    dr_params = dict(data_dir="data/mimic3",
+                     version="dummy")
 
 
 @ex.post_run_hook
@@ -77,39 +151,24 @@ def run_eval_pred():
 
 
 @ex.main
-def run_laat(device,
+def run_laat(embedding_path,
              batch_size,
-             max_seq_length,
+             dr_params,
+             laat_params,
+             device,
              epochs,
              lr,
              eval_only,
-             embedding_npy_path,
-             u,
-             da,
-             dropout,
-             pad_idx,
-             trainable,
              _log,
              _run):
 
-    embed_matrix = np.load(f"{embedding_npy_path}")
-    w2v_weights_from_np = torch.Tensor(embed_matrix)
-    dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size=batch_size,
-                                                                        max_seq_length=max_seq_length)
-
-    model = LAAT(n=len(dr.featurizer.vocab),
-                 de=embed_matrix.shape[1],
-                 L=len(dr.id2label),
-                 u=u,
-                 da=da,
-                 dropout=dropout,
-                 pad_idx=pad_idx,
-                 pre_trained_weights=w2v_weights_from_np,
-                 trainable=trainable)
-
+    model, train_data_loader, dev_data_loader, test_data_loader = load_model(embedding_path=embedding_path,
+                                                                             batch_size=batch_size,
+                                                                             dr_params=dr_params,
+                                                                             laat_params=laat_params)
     model = model.to(device)
     print(model)
-    model_save_fname = f"{Path(embedding_npy_path).stem}_LAAT"
+    model_save_fname = f"{Path(embedding_path).stem}_LAAT"
 
     if not eval_only:
         _log.info(f"{'=' * 10}LAAT TRAINING STARTED{'=' * 10}")
@@ -139,7 +198,7 @@ def run_laat(device,
         final_tr_f1 = None
 
     # generate predictions file for evaluation script
-    exp_vers = Path(embedding_npy_path).stem
+    exp_vers = Path(embedding_path).stem
     predicted_fp = f"{MODEL_FOLDER / f'LAAT_test_preds_{exp_vers}.txt'}"
     generate_preds_file(test_eval_data["predicted"],
                         test_eval_data["doc_ids"],
