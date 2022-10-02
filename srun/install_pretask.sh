@@ -2,7 +2,8 @@
 
 # make sure only first task per node installs stuff, others wait
 DONEFILE="/netscratch/pokarats/tmp/install_done_${SLURM_JOBID}"
-PYVERSION="$(python -V 2>&1 | grep -o '3\.\d*')"
+# the -P flag works on Linux, but not on macOS
+PYVERSION="$(python -V 2>&1 | grep -Po '(?<=Python )(.+)')"
 if [[ $SLURM_LOCALID == 0 ]]; then
     if [[ $PYVERSION < 3.8 ]]; then
       # only install this for python version older than 3.8
