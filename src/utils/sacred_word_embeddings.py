@@ -179,9 +179,9 @@ def word_embeddings(_log, version, input_type, data_iterator, notes_file, slice_
     model.train(sentences, total_examples=model.corpus_count, epochs=model.epochs)
 
     if notes_file_path.is_file():
-        embedding_dir = notes_file_path.parent / f"{model_name.split('.')[-1]}"
+        embedding_dir = notes_file_path.parent.parent / f"{model_name.split('.')[-1]}"
     elif notes_file_path.is_dir():
-        embedding_dir = notes_file_path / f"{model_name.split('.')[-1]}"
+        embedding_dir = notes_file_path.parent / f"{model_name.split('.')[-1]}"
     else:
         raise FileNotFoundError(f"{notes_file_path} is not a valid path!")
 
@@ -228,7 +228,7 @@ def default_cfg():
 
     # gensim_to_npy func params
     gen_npy_params = dict(prune=True,
-                          prune_file=Path(data_dir) / "mimic3" / "vocab.csv",
+                          prune_file=mimic_dir / "vocab.csv",
                           normed=False,  # whether to also save L2-normed vectors as embeddings
                           embedding_dim=w2v_params["vector_size"])
 
