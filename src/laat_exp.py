@@ -40,7 +40,7 @@ SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}/{Path(__file
 neptune_run = neptune.init(
     project="pokarats/LAAT",
     api_token=DEV_API_KEY,
-    tags=f"dummy_{date.today():%y_%m_%d}"
+    tags=f"test top50"
 )
 
 # Step 2: Add NeptuneObserver() to your sacred experiment's observers
@@ -86,7 +86,12 @@ def text_cfg():
     version = "full"
     input_type = "text"
     mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
-    model_dir = Path(mimic_dir).parent / "model"
+
+    if input_type == "text":
+        model_dir = Path(mimic_dir).parent / "model"
+    else:
+        # input_type == "umls"
+        model_dir = Path(data_dir) / "linked_data" / "model"
 
     # Pytorch hyperparameters
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -95,7 +100,7 @@ def text_cfg():
     eval_only = False
 
     # load model params are separate into sections below
-    batch_size = 16
+    batch_size = 8
     embedding_path = model_dir / f"processed_full_{input_type}_pruned.npy"
 
     # LAAT model params, n, de, L, pre_trained_weights defined in load_model captured function
@@ -106,12 +111,12 @@ def text_cfg():
                        trainable=True)
 
     # DataReader class params, first arg is batch_size
-    dr_params = dict(data_dir="data/mimic3",
-                     version="full",
-                     input_type="text",
+    dr_params = dict(data_dir=f"{Path(data_dir) / 'mimic3'}",
+                     version=version,
+                     input_type=input_type,
                      prune_cui=False,
                      cui_prune_file=None,
-                     vocab_fn="processed_full_text_pruned.json",
+                     vocab_fn=f"processed_full_{input_type}_pruned.json",
                      max_seq_length=4000,
                      doc_iterator=None,
                      umls_iterator=None)
@@ -126,11 +131,16 @@ def dummy_cfg():
     version = "dummy"
     input_type = "text"
     mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
-    model_dir = Path(mimic_dir).parent / "model"
+
+    if input_type == "text":
+        model_dir = Path(mimic_dir).parent / "model"
+    else:
+        # input_type == "umls"
+        model_dir = Path(data_dir) / "linked_data" / "model"
 
     # Pytorch hyperparameters
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    epochs = 2
+    epochs = 3
     lr = 0.001
     eval_only = False
 
@@ -141,8 +151,7 @@ def dummy_cfg():
     # unchanged
 
     # DataReader class params, first arg is batch_size
-    dr_params = dict(data_dir="data/mimic3",
-                     version="dummy")
+    # unchanged from defaults
 
 
 @ex.post_run_hook
@@ -189,9 +198,11 @@ def run_laat(embedding_path,
 
     eval_f1, test_eval_data = evaluate(test_data_loader, model, device)
     eval_loss = test_eval_data["avg_loss"]
+    _run.log_scalar("testing/eval_loss", eval_loss)
+    _run.log_scalar("testing/eval_f1", eval_f1)
 
     if not eval_only:
-        final_tr_loss = tr_eval_data["avg_loss"]
+        final_tr_loss = tr_eval_data[-1]["avg_loss"]
         final_tr_f1 = tr_f1_scores[-1]
     else:
         final_tr_loss = None

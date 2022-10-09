@@ -70,8 +70,8 @@ def train(
 
                 labels_logits, labels_loss = model(inputs, labels)
                 loss = labels_loss
-                if step % 50 == 0:
-                    _run.log_scalar("training/batch/loss", loss, step)
+                if step % 100 == 0:
+                    _run.log_scalar("training/batch/loss", labels_loss.item(), step)
                 tr_loss += labels_loss.item()
 
                 loss.backward()
@@ -112,7 +112,7 @@ def train(
 
             # Sacred/Neptune logging
             _run.log_scalar("training/epoch/loss", tr_loss / nb_tr_examples, epoch_no)
-            _run.log_scalar("training/epoch/val_loss", eval_data[-1], epoch_no)
+            _run.log_scalar("training/epoch/val_loss", eval_data["avg_loss"], epoch_no)
             _run.log_scalar("training/epoch/val_score", score, epoch_no)
 
             last_fmicro = score

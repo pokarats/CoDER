@@ -214,7 +214,7 @@ class Dataset(data.Dataset):
         return padded_input_ids, label_ids
 
 
-def get_dataloader(dataset, batch_size, shuffle, collate_fn=Dataset.mimic_collate_fn, num_workers=1):
+def get_dataloader(dataset, batch_size, shuffle, collate_fn=Dataset.mimic_collate_fn, num_workers=8):
     data_loader = data.DataLoader(
         dataset=dataset,
         batch_size=batch_size,
