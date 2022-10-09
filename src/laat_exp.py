@@ -28,6 +28,7 @@ from models.laat import LAAT
 from models.train_eval_laat import train, evaluate, generate_preds_file
 from utils.prepare_laat_data import get_data
 from utils.config import PROJ_FOLDER, MODEL_FOLDER, DEV_API_KEY
+from utils.eval import all_metrics
 from neptune.new.integrations.sacred import NeptuneObserver
 from sacred.observers import FileStorageObserver
 from sacred import Experiment
@@ -65,6 +66,12 @@ def load_model(_log,
     _log.info(f"Vocab size: {len(dr.featurizer.vocab)}\n"
               f"Embedding Dim: {embed_matrix.shape[1]}\n"
               f"Num Labels: {len(dr.mlb.classes_)}\n")
+
+    _log.info(f"Dataset Stats\n"
+              f"Train Partition ({len(train_data_loader.dataset)} samples):\n{dr.get_dataset_stats('train')}\n"
+              f"Dev Partition ({len(dev_data_loader.dataset)} samples):\n{dr.get_dataset_stats('dev')}\n"
+              f"Test Partition ({len(test_data_loader.dataset)} samples):\n{dr.get_dataset_stats('test')}\n")
+
     laat_params = {"n": len(dr.featurizer.vocab),
                    "de": embed_matrix.shape[1],
                    "L": len(dr.mlb.classes_),
@@ -198,8 +205,17 @@ def run_laat(embedding_path,
 
     eval_f1, test_eval_data = evaluate(test_data_loader, model, device)
     eval_loss = test_eval_data["avg_loss"]
+
+    # eval metrics
+    test_raw = test_eval_data["logits"]
+    test_y = test_eval_data["true_labels"]
+    test_y_hat = test_eval_data["predicted"]
+    test_eval_metrics = all_metrics(test_y_hat, test_y, k=[5, 8, 15], yhat_raw=test_raw, calc_auc=True)
+
     _run.log_scalar("testing/eval_loss", eval_loss)
-    _run.log_scalar("testing/eval_f1", eval_f1)
+    _run.log_scalar("testing/eval_f1_micro", eval_f1)
+    _run.log_scalar("testing/eval_f1_macro", test_eval_metrics["f1_macro"])
+    _run.log_scalar("testing/eval_P@5", test_eval_metrics["prec_at_5"])
 
     if not eval_only:
         final_tr_loss = tr_eval_data[-1]["avg_loss"]
@@ -211,7 +227,7 @@ def run_laat(embedding_path,
     # generate predictions file for evaluation script
     exp_vers = Path(embedding_path).stem
     predicted_fp = f"{MODEL_FOLDER / f'LAAT_test_preds_{exp_vers}.txt'}"
-    generate_preds_file(test_eval_data["predicted"],
+    generate_preds_file(test_eval_data["final_predicted"],
                         test_eval_data["doc_ids"],
                         preds_file=predicted_fp)
     _run.add_artifact(predicted_fp, name="predicted_labels_file")
@@ -219,7 +235,8 @@ def run_laat(embedding_path,
     return dict(final_training_loss=final_tr_loss,
                 final_training_f1=final_tr_f1,
                 eval_loss=eval_loss,
-                eval_f1=eval_f1)
+                eval_f1=eval_f1,
+                **test_eval_metrics)
 
 
 # Step 3: Run you experiment and explore metadata in the Neptune app

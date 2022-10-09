@@ -84,7 +84,7 @@ class LAAT(nn.Module):
         V = H.transpose(1, 2).bmm(A)  # b x 2u x L
 
         labels_output = self.labels_output(V.transpose(1, 2))  # b x L x 1
-        labels_output = labels_output.squeeze()  # b x L
+        labels_output = labels_output.squeeze(dim=2)  # b x L, specify dim or b dropped if batch has 1 sample!
         labels_output = self.dropout(labels_output)
 
         output = (labels_output,)

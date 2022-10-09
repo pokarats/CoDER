@@ -65,6 +65,7 @@ def train(
             nb_tr_examples, nb_tr_steps = 0, 0
 
             for step, batch in enumerate(tqdm(train_dataloader, desc="Train Batch Iteration")):
+
                 batch = tuple(tensor.to(device) for tensor in batch)
                 inputs, labels = batch
 
@@ -189,8 +190,10 @@ def evaluate(dataloader, model, device, no_labels=False):
     else:
         score = 0.
         eval_data = {"logits": labels_logits,
-                     "predicted": mlb.inverse_transform(labels_preds),
+                     "predicted": labels_preds,
                      "true_labels": None,
+                     "final_predicted": mlb.inverse_transform(labels_preds),
+                     "final_labels": None,
                      "doc_ids": dataset_doc_ids,
                      "avg_loss": avg_loss}
 
@@ -198,8 +201,10 @@ def evaluate(dataloader, model, device, no_labels=False):
         return score, eval_data
 
     eval_data = {"logits": labels_logits,
-                 "predicted": final_preds,
-                 "true_labels": final_labels,
+                 "predicted": labels_preds,
+                 "true_labels": labels,
+                 "final_predicted": final_preds,
+                 "final_labels": final_labels,
                  "doc_ids": dataset_doc_ids,
                  "avg_loss": avg_loss}
 
