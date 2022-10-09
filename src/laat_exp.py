@@ -40,7 +40,7 @@ SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}/{Path(__file
 neptune_run = neptune.init(
     project="pokarats/LAAT",
     api_token=DEV_API_KEY,
-    tags=f"test top50"
+    tags=f"slurm top50"
 )
 
 # Step 2: Add NeptuneObserver() to your sacred experiment's observers
@@ -83,7 +83,7 @@ def text_cfg():
     # Directory and data organization
     # data directory and file organization
     data_dir = PROJ_FOLDER / "data"
-    version = "full"
+    version = "50"
     input_type = "text"
     mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
 
