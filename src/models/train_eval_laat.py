@@ -8,8 +8,12 @@ import logging
 from torch import optim
 from sklearn.metrics import f1_score
 from tqdm import tqdm, trange
+
+import os
+import platform
+import sys
 from pathlib import Path
-from datetime import date
+from src.utils.config import MODEL_FOLDER
 
 
 # get rid of this if using Sacred as it's done by them otherwise pass in their seed param
@@ -26,11 +30,8 @@ def set_seed(seed):
 
 logger = logging.getLogger(__name__)
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
-SAVE_FOLDER = PROJECT_DIR / "res" / f"{date.today():%y_%m_%d}"
-
-if not SAVE_FOLDER.exists():
-    SAVE_FOLDER.mkdir(parents=True, exist_ok=False)
+if not MODEL_FOLDER.exists():
+    MODEL_FOLDER.mkdir(parents=True, exist_ok=False)
 
 
 def train(
@@ -69,8 +70,8 @@ def train(
 
                 labels_logits, labels_loss = model(inputs, labels)
                 loss = labels_loss
-                if step % 50 == 0:
-                    _run.log_scalar("training/batch/loss", loss, step)
+                if step % 100 == 0:
+                    _run.log_scalar("training/batch/loss", labels_loss.item(), step)
                 tr_loss += labels_loss.item()
 
                 loss.backward()
@@ -98,7 +99,7 @@ def train(
             if score >= best_fmicro:
                 best_fmicro = score
                 logger.info(f"saving best model so far from epoch: {epoch_no}, micro f1: {score}\n")
-                torch.save(model.state_dict(), f"{SAVE_FOLDER / f'best_{model_save_fname}.pt'}")
+                torch.save(model.state_dict(), f"{MODEL_FOLDER / f'best_{model_save_fname}.pt'}")
 
             if early_stop:
                 if score < last_fmicro:
@@ -111,7 +112,7 @@ def train(
 
             # Sacred/Neptune logging
             _run.log_scalar("training/epoch/loss", tr_loss / nb_tr_examples, epoch_no)
-            _run.log_scalar("training/epoch/val_loss", eval_data[-1], epoch_no)
+            _run.log_scalar("training/epoch/val_loss", eval_data["avg_loss"], epoch_no)
             _run.log_scalar("training/epoch/val_score", score, epoch_no)
 
             last_fmicro = score
