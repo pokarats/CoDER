@@ -161,7 +161,6 @@ def dummy_cfg():
     # unchanged from defaults
 
 
-@ex.post_run_hook
 def run_eval_pred():
     pass
 
@@ -216,6 +215,8 @@ def run_laat(embedding_path,
     _run.log_scalar("testing/eval_f1_micro", eval_f1)
     _run.log_scalar("testing/eval_f1_macro", test_eval_metrics["f1_macro"])
     _run.log_scalar("testing/eval_P@5", test_eval_metrics["prec_at_5"])
+    _run.log_scalar("testing/eval_AUC_micro", test_eval_metrics["auc_micro"])
+    _run.log_scalar("testing/eval_AUC_macro", test_eval_metrics["auc_macro"])
 
     if not eval_only:
         final_tr_loss = tr_eval_data[-1]["avg_loss"]

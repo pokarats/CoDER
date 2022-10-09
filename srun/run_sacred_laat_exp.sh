@@ -8,7 +8,7 @@ MEM=64GB
 
 # variables for srun and python
 
-vers="eval_only_50"
+vers="full"
 echo "Submitting version: $vers input_type"
 
 srun -K -p RTXA6000-MLT \
@@ -22,4 +22,4 @@ srun -K -p RTXA6000-MLT \
   --nodes=1 \
   --mail-type=END,FAIL \
   --mail-user=noon.pokaratsiri@dfki.de \
-srun/install_pretask.sh python src/laat_exp.py with data_dir="$MYDATA" eval_only=True
+srun/install_pretask.sh python src/laat_exp.py with data_dir="$MYDATA" version="$vers"
