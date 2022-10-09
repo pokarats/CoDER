@@ -183,7 +183,8 @@ def run_laat(embedding_path,
                                                                              laat_params=laat_params)
     model = model.to(device)
     print(model)
-    model_save_fname = f"{Path(embedding_path).stem}_LAAT"
+    version = dr_params["version"]
+    model_save_fname = f"{version}_{Path(embedding_path).stem}_LAAT"
 
     if not eval_only:
         _log.info(f"{'=' * 10}LAAT TRAINING STARTED{'=' * 10}")
@@ -227,7 +228,7 @@ def run_laat(embedding_path,
 
     # generate predictions file for evaluation script
     exp_vers = Path(embedding_path).stem
-    predicted_fp = f"{MODEL_FOLDER / f'LAAT_test_preds_{exp_vers}.txt'}"
+    predicted_fp = f"{MODEL_FOLDER / f'{version}_LAAT_test_preds_{exp_vers}.txt'}"
     generate_preds_file(test_eval_data["final_predicted"],
                         test_eval_data["doc_ids"],
                         preds_file=predicted_fp)
