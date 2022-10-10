@@ -43,15 +43,15 @@ def train(
         device,
         _run,  # Sacred metrics api
         early_stop=False,
-        decay_rate=0.1,
+        decay_rate=1.0,
         grad_clip=None,
         model_save_fname="LAAT_model"
 ):
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)  # per LAAT, decay default=0.01
     if decay_rate > 0.:
-        # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, decay_rate)
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, decay_rate)
         # reduce 10% if stagnant for 5 epochs per LAAT paper
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=decay_rate)
+        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=decay_rate)
     else:
         scheduler = None
     steps = 0
@@ -90,7 +90,7 @@ def train(
 
             score, eval_data = evaluate(dev_dataloader, model, device)
             if scheduler is not None:
-                scheduler.step(eval_data["avg_loss"])
+                scheduler.step()
 
             # first epoch
             if best_fmicro is None:
