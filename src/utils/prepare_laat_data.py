@@ -166,7 +166,9 @@ class DataReader:
             doc_lens = list(map(int, self.doc_iterator(self.doc_split_path[split], slice_pos=4)))
         elif self.input_type == "umls":
             doc_lens = list(map(int, [doc_data[2] for doc_data in
-                                      self.umls_doc_iterator(self.umls_doc_split_path[split])]))
+                                      self.umls_doc_iterator(self.umls_doc_split_path[split],
+                                                             pruned=self.prune_cui,
+                                                             discard_cuis_file=self.cui_prune_file)]))
         else:
             raise ValueError(f"Invalid input_type option!")
 
@@ -235,7 +237,7 @@ def get_data(batch_size=8, **kwargs):
 
 
 if __name__ == '__main__':
-    check_data_reader = True
+    check_data_reader = False
     if check_data_reader:
         data_reader = DataReader(data_dir="../../data/mimic3",
                                  version="50",
