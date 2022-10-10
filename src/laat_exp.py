@@ -149,6 +149,8 @@ def dummy_cfg():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     epochs = 3
     lr = 0.001
+    early_stop = False
+    grad_clip = None
     eval_only = False
 
     # load model params are separate into sections below
@@ -173,6 +175,8 @@ def run_laat(embedding_path,
              device,
              epochs,
              lr,
+             early_stop,
+             grad_clip,
              eval_only,
              _log,
              _run):
@@ -195,7 +199,8 @@ def run_laat(embedding_path,
                                                     lr,
                                                     device=device,
                                                     _run=_run,
-                                                    grad_clip=None,
+                                                    early_stop=early_stop,
+                                                    grad_clip=grad_clip,
                                                     model_save_fname=model_save_fname))
 
     _log.info(f"{'=' * 10}LAAT EVALUATION STARTED{'=' * 10}")
