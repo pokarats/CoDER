@@ -47,7 +47,7 @@ def train(
         grad_clip=None,
         model_save_fname="LAAT_model"
 ):
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)  # per LAAT, decay default=0.01
     if decay_rate > 0.:
         # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, decay_rate)
         # reduce 10% if stagnant for 5 epochs per LAAT paper
