@@ -104,6 +104,8 @@ def text_cfg():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     epochs = 50
     lr = 0.001
+    early_stop = False
+    grad_clip = None
     eval_only = False
 
     # load model params are separate into sections below
