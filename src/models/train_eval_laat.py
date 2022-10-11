@@ -42,16 +42,22 @@ def train(
         lr,
         device,
         _run,  # Sacred metrics api
+        threshold=0.5,
         early_stop=False,
-        decay_rate=1.0,
+        decay_rate=0.9,  # per LAAT paper lr_scheduler_factor default=0.9
         grad_clip=None,
         model_save_fname="LAAT_model"
 ):
-    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)  # per LAAT, decay default=0.01
+    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=0)  # per LAAT, decay default=0
     if decay_rate > 0.:
-        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, decay_rate)
+        # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, decay_rate)
         # reduce 10% if stagnant for 5 epochs per LAAT paper
-        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=decay_rate)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+                                                         mode="max",
+                                                         patience=5,
+                                                         factor=decay_rate,
+                                                         min_lr=0.0001,
+                                                         verbose=True)
     else:
         scheduler = None
     steps = 0
@@ -88,9 +94,9 @@ def train(
                 optimizer.zero_grad()
                 steps += 1
 
-            score, eval_data = evaluate(dev_dataloader, model, device)
+            score, eval_data = evaluate(dev_dataloader, model, device, threshold)
             if scheduler is not None:
-                scheduler.step()
+                scheduler.step(score)
 
             # first epoch
             if best_fmicro is None:
@@ -110,6 +116,7 @@ def train(
                         logger.info(f"No. tolerance reached for worse score than last!\n"
                                     f"Early stopping triggered in {epoch_no} epochs\n")
                         evals.append((epoch_no, score, eval_data))
+                        torch.save(model.state_dict(), f"{MODEL_FOLDER / f'early_{epoch_no}_{model_save_fname}.pt'}")
                         break
 
             # Sacred/Neptune logging
@@ -127,7 +134,7 @@ def train(
     return evals
 
 
-def evaluate(dataloader, model, device, no_labels=False):
+def evaluate(dataloader, model, device, threshold=0.5, no_labels=False):
     # Turn on evaluation mode which disables dropout.
     model.eval()
     labels_logits, labels_preds, labels = list(), list(), list()
@@ -163,7 +170,7 @@ def evaluate(dataloader, model, device, no_labels=False):
                 b_labels_logits = model(b_inputs)
 
             # predicted labels dtype int
-            b_labels_preds = (torch.sigmoid(b_labels_logits).detach().cpu().numpy() >= 0.5).astype(int)
+            b_labels_preds = (torch.sigmoid(b_labels_logits).detach().cpu().numpy() >= threshold).astype(int)
             b_labels_logits = detach(b_labels_logits, float)
 
             if not no_labels:

@@ -41,7 +41,7 @@ SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}/{Path(__file
 neptune_run = neptune.init(
     project="pokarats/LAAT",
     api_token=DEV_API_KEY,
-    tags=f"slurm top50 umls"
+    tags=f"slurm top50 text"
 )
 
 # Step 2: Add NeptuneObserver() to your sacred experiment's observers
@@ -117,7 +117,7 @@ def text_cfg():
                        da=256,
                        dropout=0.3,
                        pad_idx=0,
-                       trainable=True)
+                       trainable=False)  # word embedding weights static
 
     # DataReader class params, first arg is batch_size
     dr_params = dict(data_dir=f"{Path(data_dir) / 'mimic3'}",

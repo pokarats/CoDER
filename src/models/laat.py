@@ -22,7 +22,7 @@ import numpy as np
 
 class LAAT(nn.Module):
 
-    def __init__(self, n, de, L, u=256, da=256, dropout=0.3, pad_idx=0, pre_trained_weights=None, trainable=True):
+    def __init__(self, n, de, L, u=256, da=256, dropout=0.3, pad_idx=0, pre_trained_weights=None, trainable=False):
         """
         parameter names follow the variables in the LAAT paper
 
@@ -41,39 +41,70 @@ class LAAT(nn.Module):
         :type dropout:
         """
         super(LAAT, self).__init__()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.word_embed = nn.Embedding.from_pretrained(pre_trained_weights,
                                                        padding_idx=pad_idx,
                                                        freeze=trainable) if pre_trained_weights is not None else \
             nn.Embedding(n,
                          de,
                          padding_idx=pad_idx)
+        self.hidden_size = u
         self.bilstm = nn.LSTM(input_size=de, hidden_size=u, bidirectional=True, batch_first=True, num_layers=1)
         self.W = nn.Linear(2 * u, da, bias=False)
         self.U = nn.Linear(da, L, bias=False)
-        self.labels_output = nn.Linear(2 * u, 1)
+        self.labels_output = nn.Linear(2 * u, 1, bias=True)
         self.dropout = nn.Dropout(dropout)
         self.labels_loss_fct = nn.BCEWithLogitsLoss()
         self.init()
 
-    def init(self):
-        torch.nn.init.xavier_uniform_(self.W.weight)
-        torch.nn.init.xavier_uniform_(self.U.weight)
-        torch.nn.init.xavier_uniform_(self.labels_output.weight)
-        for name, param in self.bilstm.named_parameters():
-            if 'bias' in name:
-                torch.nn.init.constant_(param, 0.0)
-            elif 'weight' in name:
-                torch.nn.init.xavier_normal_(param)
+    def init(self, mean=0.0, std=0.03, xavier=False):
+        if xavier:
+            torch.nn.init.xavier_uniform_(self.W.weight)
+            torch.nn.init.xavier_uniform_(self.U.weight)
+            torch.nn.init.xavier_uniform_(self.labels_output.weight)
+            for name, param in self.bilstm.named_parameters():
+                if 'bias' in name:
+                    torch.nn.init.constant_(param, 0.0)
+                elif 'weight' in name:
+                    torch.nn.init.xavier_uniform_(param)
+        else:
+            # LAAT paper initialization
+            torch.nn.init.normal_(self.W.weight, mean, std)
+            if self.W.bias is not None:
+                self.W.bias.data.fill_(0)
+            torch.nn.init.normal_(self.U.weight, mean, std)
+            if self.U.bias is not None:
+                self.U.bias.data.fill_(0)
+            torch.nn.init.normal_(self.labels_output.weight, mean, std)
+
+    def init_lstm_hidden(self, batch_size):
+        """
+        Initialise the lstm hidden layer per LAAT paper
+        :param batch_size: int
+            The batch size
+        :return: Variable
+            The initialised hidden layer
+        """
+        # [(n_layers x n_directions) x batch_size x hidden_size]
+        h = torch.zeros(2, batch_size, self.hidden_size).to(self.device)
+        c = torch.zeros(2, batch_size, self.hidden_size).to(self.device)
+
+        return h, c
 
     def forward(self, x, y=None):
         # get sequence lengths
         seq_lengths = torch.count_nonzero(x, dim=1).cpu()
 
-        x = self.word_embed(x)  # b x n x de
+        # get batch size
+        batch_size = x.size()[0]
+
+        embedded = self.word_embed(x)  # b x n x de
+        embedded = self.dropout(embedded)  # per LAAT paper, dropout applied to embedding step
 
         # pack padded sequence
-        x = nn.utils.rnn.pack_padded_sequence(x, seq_lengths, batch_first=True, enforce_sorted=False)
-        H, _ = self.bilstm(x)  # b x n x 2u <-- dim of unpacked H
+        embedded = nn.utils.rnn.pack_padded_sequence(embedded, seq_lengths, batch_first=True, enforce_sorted=False)
+        lstm_hidden = self.init_lstm_hidden(batch_size)
+        H, _ = self.bilstm(embedded, lstm_hidden)  # b x n x 2u <-- dim of unpacked H
 
         # pad packed output H
         H, unpacked_lengths = nn.utils.rnn.pad_packed_sequence(H, batch_first=True)
@@ -85,7 +116,7 @@ class LAAT(nn.Module):
 
         labels_output = self.labels_output(V.transpose(1, 2))  # b x L x 1
         labels_output = labels_output.squeeze(dim=2)  # b x L, specify dim or b dropped if batch has 1 sample!
-        labels_output = self.dropout(labels_output)
+        # labels_output = self.dropout(labels_output) # no dropout in LAAT paper
 
         output = (labels_output,)
 
