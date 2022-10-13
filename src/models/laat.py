@@ -52,7 +52,8 @@ class LAAT(nn.Module):
         self.bilstm = nn.LSTM(input_size=de, hidden_size=u, bidirectional=True, batch_first=True, num_layers=1)
         self.W = nn.Linear(2 * u, da, bias=False)
         self.U = nn.Linear(da, L, bias=False)
-        self.labels_output = nn.Linear(2 * u, 1, bias=True)
+        # changed labels_output dim to 2u x L from 2u x 1 per LAAT implementation
+        self.labels_output = nn.Linear(2 * u, L, bias=True)
         self.dropout = nn.Dropout(dropout)
         self.labels_loss_fct = nn.BCEWithLogitsLoss()
         self.init()
@@ -104,6 +105,7 @@ class LAAT(nn.Module):
         # pack padded sequence
         embedded = nn.utils.rnn.pack_padded_sequence(embedded, seq_lengths, batch_first=True, enforce_sorted=False)
         lstm_hidden = self.init_lstm_hidden(batch_size)
+        self.bilstm.flatten_parameters()
         H, _ = self.bilstm(embedded, lstm_hidden)  # b x n x 2u <-- dim of unpacked H
 
         # pad packed output H
@@ -114,8 +116,12 @@ class LAAT(nn.Module):
         A = torch.softmax(self.U(Z), -1)  # b x n x L
         V = H.transpose(1, 2).bmm(A)  # b x 2u x L
 
-        labels_output = self.labels_output(V.transpose(1, 2))  # b x L x 1
-        labels_output = labels_output.squeeze(dim=2)  # b x L, specify dim or b dropped if batch has 1 sample!
+        # b x L
+        # LAAT implementation of attention layer weighted sum, bias added after summing
+        labels_output = self.labels_output.weight.mul(V.transpose(1, 2)).sum(dim=2).add(self.labels_output.bias)
+
+        # labels_output = self.labels_output(V.transpose(1, 2))  # b x L x 1
+        # labels_output = labels_output.squeeze(dim=2)  # b x L, specify dim or b dropped if batch has 1 sample!
         # labels_output = self.dropout(labels_output) # no dropout in LAAT paper
 
         output = (labels_output,)
