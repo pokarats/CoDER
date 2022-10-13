@@ -87,8 +87,8 @@ class LAAT(nn.Module):
             The initialised hidden layer
         """
         # [(n_layers x n_directions) x batch_size x hidden_size]
-        h = torch.zeros(2, batch_size, self.hidden_size).to(self.device)
-        c = torch.zeros(2, batch_size, self.hidden_size).to(self.device)
+        h = torch.zeros(2, batch_size, self.hidden_size, requires_grad=True).to(self.device)
+        c = torch.zeros(2, batch_size, self.hidden_size, requires_grad=True).to(self.device)
 
         return h, c
 
