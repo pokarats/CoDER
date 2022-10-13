@@ -190,7 +190,7 @@ def run_laat(embedding_path,
     model = model.to(device)
     print(model)
     version = dr_params["version"]
-    model_save_fname = f"{version}_{Path(embedding_path).stem}_LAAT"
+    model_save_fname = f"filtered_{version}_{Path(embedding_path).stem}_LAAT"
 
     if not eval_only:
         _log.info(f"{'=' * 10}LAAT TRAINING STARTED{'=' * 10}")
