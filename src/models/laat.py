@@ -113,16 +113,12 @@ class LAAT(nn.Module):
         assert torch.equal(seq_lengths, unpacked_lengths)
 
         Z = torch.tanh(self.W(H))  # b x n x da
-        A = torch.softmax(self.U(Z), -1)  # b x n x L
+        A = torch.softmax(self.U(Z), 1)  # b x n x L, softmax along dim=1 so that each col in L sums to 1!!
         V = H.transpose(1, 2).bmm(A)  # b x 2u x L
 
-        # b x L
         # LAAT implementation of attention layer weighted sum, bias added after summing
+        # resultant dim: b x L
         labels_output = self.labels_output.weight.mul(V.transpose(1, 2)).sum(dim=2).add(self.labels_output.bias)
-
-        # labels_output = self.labels_output(V.transpose(1, 2))  # b x L x 1
-        # labels_output = labels_output.squeeze(dim=2)  # b x L, specify dim or b dropped if batch has 1 sample!
-        # labels_output = self.dropout(labels_output) # no dropout in LAAT paper
 
         output = (labels_output,)
 
