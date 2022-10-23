@@ -116,7 +116,7 @@ def get_dataset_semantic_types(file_path):
 
 
 def get_dataset_icd9_codes(data_dir,
-                           filename_pattern="*.json",
+                           filename_pattern="*.csv",
                            drop_column_names=['id', 'doc'],
                            label_column_name='labels_id'):
     """
