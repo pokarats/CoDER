@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: Python template with an argument parser and logger. Put all the "main" logic into the method called "main".
-             Only use the true "__main__" section to add script arguments. The logger writes to a hidden folder './log/'
+DESCRIPTION: Implementation of the rule-based and non-DL baseline models. The logger writes to a hidden folder './log/'
              and uses the name of this file, followed by the date (by default). The argument parser comes with a default
-             option --quiet to keep the stdout clean.
+             option --quiet to keep the stdout clean. (if run from main with logger config, otherwise cout.txt in
+             Sacred logging)
 
-@copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
-            Intelligenz GmbH or its licensors, as applicable.
 
 @author: Noon Pokaratsiri Goldstein, sklearn pipeline adapted from code from Albers Uzila
 (https://towardsdatascience.com/multilabel-text-classification-done-right-using-scikit-learn-and-stacked-generalization-f5df2defc3b5)
@@ -20,7 +18,11 @@ import logging
 import argparse
 import traceback
 import joblib
-import pickle
+import platform
+if platform.python_version() < "3.8":
+    import pickle5 as pickle
+else:
+    import pickle
 
 import pandas as pd
 import spacy
@@ -297,6 +299,7 @@ class RuleBasedClassifier:
         """
 
         self.data_dir = Path(cl_arg.data_dir)
+        self.version = version
         self.icd9_umls_fname = self.data_dir / 'ICD9_umls2020aa'
         self.cui_discard_set_pfile = self.data_dir / 'linked_data' / version / f'{version}_cuis_to_discard.pickle'
         self.cuis_to_discard = self._get_cuis_to_discard()
@@ -322,8 +325,8 @@ class RuleBasedClassifier:
 
     @property
     def data_set_icd9(self):
-        data_dir = self.cui_discard_set_pfile.parent / 'preprocessed'
-        return get_dataset_icd9_codes(data_dir)
+        data_dir = self.data_dir / 'mimic3' / self.version
+        return get_dataset_icd9_codes(data_dir, filename_pattern="*.csv")
 
     def _get_cuis_to_discard(self):
         logger.info(f"Loading cuis to discard from pickle fie: {self.cui_discard_set_pfile}...")
