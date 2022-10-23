@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: Python template with an argument parser and logger. Put all the "main" logic into the method called "main".
-             Only use the true "__main__" section to add script arguments. The logger writes to a hidden folder './log/'
+DESCRIPTION: Data prep functions used in baseline models and non-DL baseline model experiments .
+             The logger writes to a hidden folder './log/'
              and uses the name of this file, followed by the date (by default). The argument parser comes with a default
-             option --quiet to keep the stdout clean.
+             option --quiet to keep the stdout clean. (if run from main with logger config, otherwise cout.txt in
+             Sacred logging).
 
-
-@copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
-            Intelligenz GmbH or its licensors, as applicable.
 
 @author: Noon Pokaratsiri Goldstein
 """

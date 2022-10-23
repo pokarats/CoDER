@@ -3,10 +3,6 @@
 """
 DESCRIPTION: Sentence iterator classes for reading sentences from dataset/corpus files
 
-
-@copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
-            Intelligenz GmbH or its licensors, as applicable.
-
 @author: Noon Pokaratsiri Goldstein; this is a modification from the code base obtained from:
 
 https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/preprocess_mimic3.py

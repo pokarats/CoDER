@@ -10,6 +10,8 @@ DESCRIPTION: utitly functions used in concepts_pruning.py, baseline_models.py, s
 @author: Noon Pokaratsiri Goldstein
 """
 import json
+import sys
+import os
 import platform
 if platform.python_version() < "3.8":
     import pickle5 as pickle
@@ -21,6 +23,9 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from datetime import date
 import scipy
+if platform.system() != 'Darwin':
+    sys.path.append(os.getcwd())  # only needed for slurm
+from src.utils.corpus_readers import MimicDocIter
 
 
 logger = logging.getLogger(__name__)
@@ -116,28 +121,39 @@ def get_dataset_icd9_codes(data_dir,
                            label_column_name='labels_id'):
     """
 
-    :param data_dir: data directory where all pre-processed data files with labels are (files must contain json data)
+    :param data_dir: data directory where all pre-processed data files with labels are, either .json files (if clef
+    pre-processed, or the directory must be that of the text input .csv data files)
     :type data_dir: str or Path
     :param filename_pattern: pattern for filenames of the data files
     :type filename_pattern: str
-    :param drop_column_names: names of columns to drop
+    :param drop_column_names: names of columns to drop (if passing .json files from clef pre-processing)
     :type drop_column_names: List of str
-    :param label_column_name: name of the column for the labels
+    :param label_column_name: name of the column for the labels (if passing in .json files from clef pre-processing)
     :type label_column_name: str
     :return: set of all labels across partitions in the dataset in data_dir
     :rtype: set
     """
     icd9_code_set = set()
-    for data_file in Path(data_dir).iterdir():
-        if data_file.is_file() and data_file.match(filename_pattern):
-            data = read_from_json(data_file)
-            if drop_column_names:
-                data_df = pd.DataFrame(data).drop(labels=drop_column_names, axis=1)
-            else:
-                data_df = pd.DataFrame(data)
+    if ".json" in filename_pattern:
+        for data_file in Path(data_dir).iterdir():
+            if data_file.is_file() and data_file.match(filename_pattern):
+                data = read_from_json(data_file)
+                if drop_column_names:
+                    data_df = pd.DataFrame(data).drop(labels=drop_column_names, axis=1)
+                else:
+                    data_df = pd.DataFrame(data)
 
-            for labels in data_df[label_column_name]:
-                icd9_code_set.update(labels)
+                for labels in data_df[label_column_name]:
+                    icd9_code_set.update(labels)
+    elif ".csv" in filename_pattern:
+        for data_file in Path(data_dir).iterdir():
+            if data_file.is_file() and data_file.match(filename_pattern):
+                logger.info(f"Reading from .csv file saved at: {data_file}")
+                label_iter = MimicDocIter(data_file, slice_pos=3)
+                for labels in label_iter:
+                    icd9_code_set.update(labels)
+    else:
+        raise NotImplementedError
 
     return icd9_code_set
 

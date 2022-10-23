@@ -1,13 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: Python template with an argument parser and logger. Put all the "main" logic into the method called "main".
-             Only use the true "__main__" section to add script arguments. The logger writes to a hidden folder './log/'
-             and uses the name of this file, followed by the date (by default).
-
-
-@copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
-            Intelligenz GmbH or its licensors, as applicable.
+DESCRIPTION: Train and save Word2Vec or FastText model. Command line options, logging, and configurations are through
+the Sacred library
 
 @author: Noon Pokaratsiri Goldstein; this is a modification from the code base obtained from:
 
@@ -19,7 +14,7 @@ https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/word2vec.py
 """
 import itertools
 import numpy as np
-from gensim.models import Word2Vec, KeyedVectors
+from gensim.models import Word2Vec, KeyedVectors, FastText
 from datetime import date
 import logging
 import json
@@ -57,7 +52,11 @@ def gensim_to_npy(w2v_model_file, _log, prune=False, prune_file=None, normed=Fal
     if Path(w2v_model_file).suffix == '.wordvectors':
         wv = KeyedVectors.load(str(w2v_model_file), mmap='r')
     else:
-        loaded_model = Word2Vec.load(str(w2v_model_file))
+        if "fastText" in str(w2v_model_file):
+            loaded_model = FastText.load(str(w2v_model_file))
+        else:
+            loaded_model = Word2Vec.load(str(w2v_model_file))
+
         wv = loaded_model.wv  # this is just the KeyedVectors parts
         # free up memory
         del loaded_model
@@ -134,7 +133,15 @@ def gensim_to_npy(w2v_model_file, _log, prune=False, prune_file=None, normed=Fal
 
 
 @ex.capture
-def word_embeddings(_log, version, input_type, data_iterator, notes_file, slice_pos, save_wv_only=False, **kwargs):
+def word_embeddings(_log,
+                    version,
+                    input_type,
+                    data_iterator,
+                    notes_file,
+                    slice_pos,
+                    save_wv_only=False,
+                    model_type="w2v",
+                    **kwargs):
     """
     Updated for Gensim >= 4.0, train and save Word2Vec Model
 
@@ -148,8 +155,10 @@ def word_embeddings(_log, version, input_type, data_iterator, notes_file, slice_
     :type data_iterator: initialized class with __iter__
     :param notes_file: corpus file path if input_type is umls, this should be the dir with paths to all 3 partitions
     :type notes_file: Path or str
-    :param slice_pos:
-    :type slice_pos:
+    :param slice_pos: which column of the read file from corpus reader to access
+    :type slice_pos: int
+    :param model_type: w2v vs fastText
+    :type model_type: str
     :param save_wv_only: True if saving only the lightweight KeyedVectors object of the trained model
     :type save_wv_only: bool
 
@@ -157,7 +166,10 @@ def word_embeddings(_log, version, input_type, data_iterator, notes_file, slice_
 
     """
     notes_file_path = Path(notes_file)
-    model_name = f"processed_{version}_{input_type}.model"
+    if model_type == "fastText":
+        model_name = f"{model_type}_processed_{version}_{input_type}.model"
+    else:
+        model_name = f"processed_{version}_{input_type}.model"
     if input_type == "text":
         sentences = data_iterator(notes_file_path, slice_pos)
     elif input_type == "umls":
@@ -170,9 +182,14 @@ def word_embeddings(_log, version, input_type, data_iterator, notes_file, slice_
     else:
         raise ValueError(f"Invalid input_type option!")
 
-    model = Word2Vec(**kwargs)
+    if model_type == "w2v":
+        model = Word2Vec(**kwargs)
+    elif model_type == "fastText":
+        model = FastText(**kwargs)
+    else:
+        raise NotImplementedError
 
-    _log.info(f"Building word2vec vocab on {input_type} files from {notes_file}...")
+    _log.info(f"Building {model_type} vocab on {input_type} files from {notes_file}...")
     model.build_vocab(sentences)
 
     _log.info(f"Training on {model.corpus_count} sentences over {model.epochs} iterations...")
@@ -194,8 +211,7 @@ def word_embeddings(_log, version, input_type, data_iterator, notes_file, slice_
     if save_wv_only:
         out_file = embedding_dir / f"{out_file.stem}.wordvectors"
         _log.info(f"only KeyedVectors are saved to {out_file}!! This is no longer trainable!!")
-        model_wv = model.wv
-        model_wv.save(str(out_file))
+        model.wv.save(str(out_file))
         return out_file
 
     model.save(str(out_file))
@@ -217,7 +233,8 @@ def default_cfg():
                       data_iterator=MimicIter,
                       notes_file=str(mimic_dir / f"disch_{version}.csv"),
                       slice_pos=3,
-                      save_wv_only=False)
+                      save_wv_only=False,
+                      model_type="w2v")  # w2v for Word2Vec or fastText for FastText model
 
     # gensim.models.Word2Vec params
     w2v_params = dict(vector_size=100,

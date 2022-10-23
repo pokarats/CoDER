@@ -10,6 +10,7 @@ https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/b
 and,
 https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/word2vec.py
 
+THIS SCRIPT IS NOT MAINTAINED OR TESTED AND SHOULD NOT BE USED!
 """
 import argparse
 import time
@@ -32,56 +33,12 @@ from tqdm import tqdm
 
 if platform.system() != 'Darwin':
     sys.path.append(os.getcwd())  # only needed for slurm
-from src.utils.corpus_readers import CorpusIter, ProcessedIter, MimicIter, MimicCuiIter
+from src.utils.corpus_readers import ProcessedIter, MimicIter, MimicCuiIter
 
 
 PROJ_FOLDER = Path(__file__).resolve().parent.parent.parent
 
 logger = logging.getLogger(__name__)
-
-
-def train_and_dump_word2vec(
-        medline_entities_linked_fname,
-        output_dir,
-        n_workers=4,
-        n_iter=10
-):
-    # fix embed dim = 100 and max vocab size to 50k
-    model = Word2Vec(vector_size=100, workers=n_workers, epochs=n_iter, max_final_vocab=50000)
-    sentences = CorpusIter(medline_entities_linked_fname)
-
-    logger.info(f'Building word2vec vocab on {medline_entities_linked_fname}...')
-    model.build_vocab(sentences)
-
-    logger.info('Training ...')
-    model.train(sentences, total_examples=model.corpus_count, epochs=model.epochs)
-
-    os.makedirs(output_dir, exist_ok=True)
-    logger.info('Saving word2vec model ...')
-    model.save(os.path.join(output_dir, 'word2vec.pubmed2019.50d.gz'))
-
-    wv = model.wv
-    del model  # free up memory
-
-    word2id = {"<PAD>": 0, "<UNK>": 1}
-    mat = np.zeros((len(wv.vocab.keys()) + 2, 100))
-    # initialize UNK embedding with random normal
-    mat[1] = np.random.randn(100)
-
-    for word in sorted(wv.vocab.keys()):
-        vocab_item = wv.vocab[word]
-        vector = wv.vectors[vocab_item.index]
-        mat[len(word2id)] = vector
-        word2id[word] = len(word2id)
-
-    mat_fname = Path(output_dir) / f'word2vec.guttmann.100d_mat.npy'
-    map_fname = Path(output_dir) / f'word2vec.guttmann.100d_word2id.json'
-
-    logger.info(f'Saving word2id at {map_fname} and numpy matrix at {mat_fname} ...')
-
-    np.save(str(mat_fname), mat)
-    with open(map_fname, 'w', encoding='utf-8', errors='ignore') as wf:
-        json.dump(word2id, wf)
 
 
 def gensim_to_npy(w2v_model_file, normed=False, outfile=None, embedding_dim=100):

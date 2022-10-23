@@ -26,13 +26,15 @@ DOTENV_PATH = PROJ_FOLDER / f"src/configs/.env.dev"
 try:
     load_dotenv(str(DOTENV_PATH))
     DEV_API_KEY = os.environ.get("NEPTUNE_API_TOKEN")
+    DEV_UMLS_API_KEY = os.environ.get("UMLS_API_KEY")
     assert DEV_API_KEY is not None
+    assert DEV_UMLS_API_KEY is not None
 except AssertionError:
     # this most likely happen when running on slurm
     DOTENV_PATH = "/home/pokaratsiri/projects/CoDER/src/configs/.env.dev"
     print(f"Use hard coded path to .env.dev file instead at {DOTENV_PATH}")
     load_dotenv(DOTENV_PATH)
     DEV_API_KEY = os.environ.get("NEPTUNE_API_TOKEN")
+    DEV_UMLS_API_KEY = os.environ.get("UMLS_API_KEY")
     assert DEV_API_KEY is not None
-
-print(f"Path to dotenv file: {DOTENV_PATH}")
+    assert DEV_UMLS_API_KEY is not None

@@ -1,13 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: Python template with an argument parser and logger. Put all the "main" logic into the method called "main".
-             Only use the true "__main__" section to add script arguments. The logger writes to a hidden folder './log/'
-             and uses the name of this file, followed by the date (by default). The argument parser comes with a default
-             option --quiet to keep the stdout clean.
-
-@copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
-            Intelligenz GmbH or its licensors, as applicable.
+DESCRIPTION: prune out CUIs that do not belong to the Semantic Types (TUIs) of the ICD9 codes of the MIMIC-III dataset
+and CUIs in the `dev` or `test` sets not seen in `train` set. (i.e. no zero-shot CUIs). Also prune too rare and too
+frequent CUIs based on normalized frequency thresholds.
 
 @author: Noon Pokaratsiri Goldstein, adapted from code by Saadullah Amin
 """
@@ -407,7 +403,7 @@ if __name__ == "__main__":
         help="Path to pickle file for partitions dfs dict of counters"
     )
     parser.add_argument(
-        "--misc_pickle_file", action="store", type=str, default="x",
+        "--misc_pickle_file", action="store", type=str, default="unseen_cuis",
         help="Path to miscellaneous pickle file e.g. for set of unseen cuis to discard"
     )
     parser.add_argument(
