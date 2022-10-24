@@ -1,14 +1,15 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+DESCRIPTION: Modification of the original preprocessingg script of the MIMIC-III dataset from MultiResCNN
 
-# ----------------------------------------------------------------------------------------------------------------
-# Slight changes from:
-# 
-# https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/preprocess_mimic3.py
-#
-# and
-#
-# https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
-# ----------------------------------------------------------------------------------------------------------------
+@author: Saadullah Amin, Noon Pokaratsiri Goldstein; this is a slight modification from the code from:
+
+https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/preprocess_mimic3.py
+https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
+
+"""
+
 import operator
 import csv
 import numpy as np

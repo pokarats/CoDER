@@ -1,16 +1,19 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+DESCRIPTION: Evaluation metrics as reported in cited papers + HEMKIT
+
+@author: Saadullah Amin, Noon Pokaratsiri Goldstein; this is a modification from the code from:
+
+
+https://github.com/jamesmullenbach/caml-mimic/blob/master/evaluation.py
+https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
+https://gist.github.com/dwiuzila/b2d5a7cfb7e1b19fc0c3713636939e8e#file-score-py
+
+"""
 
 # ----------------------------------------------------------------------------------------------------------------
-# Adopted from:
-#
-# https://github.com/jamesmullenbach/caml-mimic/blob/master/evaluation.py
-#
-# and
-#
-# https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
-#
-# and
-# https://gist.github.com/dwiuzila/b2d5a7cfb7e1b19fc0c3713636939e8e#file-score-py
+
 # ----------------------------------------------------------------------------------------------------------------
 
 import numpy as np

@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: prepare Dataloader for LAAT model for MIMIC-III text and umls input versions.
+DESCRIPTION: Prepare Dataloader for LAAT model for MIMIC-III text and UMLS CUI input versions.
 
 @author: Noon Pokaratsiri Goldstein
 
-Adapted from code base from: https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/utils.py
+Adapted from code base from Saadullah Amin's Dataloader code:
+https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/utils.py
 """
 
 import sys

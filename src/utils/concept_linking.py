@@ -1,4 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+DESCRIPTION: Link UMLS CUIs entity to doc text via SciSpacy.
+
+
+@author: Saadullah Amin
+"""
 
 import spacy
 import os

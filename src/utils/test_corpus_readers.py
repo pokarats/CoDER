@@ -1,10 +1,11 @@
 import unittest
 from src.utils.corpus_readers import ProcessedIter, MimicIter, MimicDocIter, MimicCuiDocIter
+from src.utils.config import PROJ_FOLDER
 import itertools
 
 
-TEST_CSV_FILE = "/Users/noonscape/Documents/msc_thesis/projects/CoDER/data/unit_test/train_3.csv"
-TEST_UMLS_FILE = "/Users/noonscape/Documents/msc_thesis/projects/CoDER/data/unit_test/train_3_umls.txt"
+TEST_CSV_FILE = f"{PROJ_FOLDER / 'data/unit_test/train_3.csv'}"
+TEST_UMLS_FILE = f"{PROJ_FOLDER / 'data/unit_test/train_3_umls.txt'}"
 
 
 class TestCorpusReaders(unittest.TestCase):

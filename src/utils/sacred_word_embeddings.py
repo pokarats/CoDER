@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: Train and save Word2Vec or FastText model. Command line options, logging, and configurations are through
-the Sacred library
+DESCRIPTION: Train and save Word2Vec or FastText model (not test). Command line options, logging, and configurations
+             are through the Sacred library
 
 @author: Noon Pokaratsiri Goldstein; this is a modification from the code base obtained from:
 
