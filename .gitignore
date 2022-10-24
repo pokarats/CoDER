@@ -135,4 +135,5 @@ dmypy.json
 /notes
 .idea/
 /scratch
+mrcnn_pip_requirements.txt
 
