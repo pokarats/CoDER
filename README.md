@@ -31,9 +31,12 @@ problem.
 Run `pip install -r requirements.txt` to install the required libraries
 
 Unless you already have the `en_core_sci_lg` model for the specified version (0.5.1) of SciSpacy, make sure to 
-run:
+run:  
+
 `pip install https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.1/en_core_sci_lg-0.5.1.tar.gz` 
-to download the model. If you use a different version of SciSpacy, change `0.5.1` in the script above to your version.
+to download the model.   
+
+If you use a different version of SciSpacy, change `0.5.1` in the script above to your version.
 
 ## Data preparation
 
@@ -55,14 +58,15 @@ With `default` configs and the specified data_dir param:
 
 `python src/utils/sacred_word_embeddings.py with data_dir=data`
 
-With `cui` configs and the specified data_dir param:
-`src/utils/sacred_word_embeddings.py with cui data_dir=data`
+With `cui` configs and the specified data_dir param:  
+
+`python src/utils/sacred_word_embeddings.py with cui data_dir=data`
 
 See [src/utils/sacred_word_embeddings.py](src/utils/sacred_word_embeddings.py) for 
 [Sacred Configs](https://sacred.readthedocs.io/en/stable/configuration.html) options.
 
 Before running these scripts, make sure your data directory organization follows the scheme described in 
-[data README](data/README.md)
+[data/README](data/README.md)
 
 The scripts save trained model files (`.model`, `.npy`, and `.json`) in the `data/[mimic3|linked_data]/model/` 
 directories.

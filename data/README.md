@@ -214,43 +214,43 @@ data
 
 #### Top-50 Version
 
-| Partition |              Description              |     Statistics |
-|-----------|:-------------------------------------:|---------------:|
-| Train     |            Unique Concepts            |          62494 |
-|           |               no unseen               |          62494 |
-|           |                pruned                 |          25322 |
-| Dev       |            Unique Concepts            |          41562 |
-|           |              only in Dev              |           2948 |
-|           |               no unseen               |          38614 |
-|           |                pruned                 |          18607 |
-| Test      |            Unique Concepts            |          43219 |
-|           |             only in Test              |           3391 |
-|           |               no unseen               |          39828 |
-|           |                pruned                 |          19013 |
-| Combined  |            Unique Concepts            |          68331 |
-|           |            total discarded            |          43009 |
-|           |                pruned                 |          62942 |
-|           | % of CUIs pruned from freq. threhold  |          21.02 |
-|           | (min: 2 + max: 20105 freq thresholds) | (20.96 + 0.05) |
+| Partition |                  Description                  |     Statistics |
+|-----------|:---------------------------------------------:|---------------:|
+| Train     |                Unique Concepts                |          62494 |
+|           |                   no unseen                   |          62494 |
+|           |                    pruned                     |          25322 |
+| Dev       |                Unique Concepts                |          41562 |
+|           |                  only in Dev                  |           2948 |
+|           |                   no unseen                   |          38614 |
+|           |                    pruned                     |          18607 |
+| Test      |                Unique Concepts                |          43219 |
+|           |                 only in Test                  |           3391 |
+|           |                   no unseen                   |          39828 |
+|           |                    pruned                     |          19013 |
+| Combined  |                Unique Concepts                |          68331 |
+|           |                total discarded                |          43009 |
+|           |                    pruned                     |          62942 |
+|           |     % of CUIs pruned from freq. threhold      |          21.02 |
+|           | (**min: 2** + **max: 20105** freq thresholds) | (20.96 + 0.05) |
 
 #### Full Version
 
-| Partition |              Description               |      Statistics |
-|-----------|:--------------------------------------:|----------------:|
-| Train     |            Unique Concepts             |           90955 |
-|           |               no unseen                |           90955 |
-|           |                 pruned                 |           26483 |
-| Dev       |            Unique Concepts             |           41992 |
-|           |              only in Dev               |             678 |
-|           |               no unseen                |           41314 |
-|           |                 pruned                 |           19343 |
-| Test      |            Unique Concepts             |           51112 |
-|           |              only in Test              |            1554 |
-|           |               no unseen                |           49558 |
-|           |                 pruned                 |           22213 |
-| All       |            Unique Concepts             |           93137 |
-|           |            total discarded             |           66654 |
-|           |                 pruned                 |           62942 |
-|           |  % of CUIs pruned from freq. threhold  |           43.44 |
-|           | (min: 8 + max: 115607 freq thresholds) | (43.40 + 0.037) |
+| Partition |                  Description                   |      Statistics |
+|-----------|:----------------------------------------------:|----------------:|
+| Train     |                Unique Concepts                 |           90955 |
+|           |                   no unseen                    |           90955 |
+|           |                     pruned                     |           26483 |
+| Dev       |                Unique Concepts                 |           41992 |
+|           |                  only in Dev                   |             678 |
+|           |                   no unseen                    |           41314 |
+|           |                     pruned                     |           19343 |
+| Test      |                Unique Concepts                 |           51112 |
+|           |                  only in Test                  |            1554 |
+|           |                   no unseen                    |           49558 |
+|           |                     pruned                     |           22213 |
+| All       |                Unique Concepts                 |           93137 |
+|           |                total discarded                 |           66654 |
+|           |                     pruned                     |           62942 |
+|           |      % of CUIs pruned from freq. threhold      |           43.44 |
+|           | (8*min: 8** + **max: 115607** freq thresholds) | (43.40 + 0.037) |
 
