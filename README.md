@@ -129,7 +129,7 @@ tokens.
 | Text Full  |   65.70   |   50.64   |    9.87    |   57.20    |    89.84    |    98.56    | 80.91 |
 | CUI Full   |   64.93   |   36.59   |    6.25    |    46.8    |    84.38    |    97.74    | 73.90 |
 
-(Results from 10/15/2022 run on git commit: 36dda76d)
+(Results from 10/15/2022 run on [Git Commit@36dda76](https://github.com/pokarats/CoDER/commit/36dda76d28e2a9606688016a770d0bf1129104fe))
 
 ## Proposed Extensions
 ### KGE
