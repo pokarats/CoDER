@@ -30,7 +30,7 @@ data
 1. Generate the train/valid/test sets (filenames: `train.csv`, `valid.csv`, and `test.csv`) for both the `full` and 
 `top50` versions of the dataset using this script: `python src/utils/preprocess.py`
 2. Generate UMLS CUIs linked data for the train/valid/test data files using this script:
-   (See command line options in [src/utils/concept_linking.py](../src/utils/concept_linking.py) for more details)
+   (See command line options in [src/utils/concept_linking.py](../src/utils/concept_linking.py#L135) for more details)
 
 ```angular2html
 python src/utils/concept_linking.py \
@@ -42,10 +42,10 @@ python src/utils/concept_linking.py \
   --batch_size 4096
 ```
 
-*NOTE:* You will have to repeat the script above for all the splits required.
+**NOTE:** You will have to repeat the script above for all the splits required.
    - Alternatively, you can download the SciSpacy linked data from the links below:
-     - [for 'full' verion](https://drive.google.com/drive/folders/188KS5fphBLqJM_-LaSCes49sl4IWaJ9o?usp=sharing)
-     - [for 'top-50' verion](https://drive.google.com/drive/folders/1ujrpnAiz2voOW8r9eQEn2H6iu608Fl-q?usp=sharing)
+     - [for 'full' version](https://drive.google.com/drive/folders/188KS5fphBLqJM_-LaSCes49sl4IWaJ9o?usp=sharing)
+     - [for 'top-50' version](https://drive.google.com/drive/folders/1ujrpnAiz2voOW8r9eQEn2H6iu608Fl-q?usp=sharing)
 3. Create a directory named `linked_data`
 4. Create the `full` and `50` version directories within the `data/mimic3` and `data/linked_data` directories and move 
 the `[train/valid/test]_[full/50].csv` and `[train/valid/test]_[full/50]_umls.txt` to their respective folders.
@@ -97,7 +97,7 @@ Just as we pre-process the text input to remove too rare and too frequent word t
 each sample that are too rare and too frequent. We determine the minimum and maximum frequency thresholds as follows:
 
 - normalized max threshold is > **1500x/1 million**
-- normalized min threshold is is **0.1x/1 million**
+- normalized min threshold is **0.1x/1 million**
 
 (TODO: make this an adjustable hyperparameter)
 
@@ -107,7 +107,7 @@ CUIs in the `dev` or `test` sets not seen in `train` set. (i.e. no zero-shot CUI
 #### Pruning Script
 
 An example run command below is for pruning the `train` split of the `top-50` version. See 
-[src/utils/concepts_pruning.py](../src/utils/concepts_pruning.py) for command line options.
+[src/utils/concepts_pruning.py](../src/utils/concepts_pruning.py#L356) for command line options.
 
 ```angular2html
 python src/utils/concepts_pruning.py \
@@ -135,5 +135,48 @@ The Semantic Types of the MIMIC-III dataset is provided at
 
 More information about [Semantic Types and Groups](https://lhncbc.nlm.nih.gov/ii/tools/MetaMap/documentation/SemanticTypesAndGroups.html)
 
-### Additional Pre-Processing for Rule-Based Models
+Data directory organization before running further scripts should be as follows:
+
+```
+data
+|   D_ICD_DIAGNOSES.csv
+|   D_ICD_PROCEDURES.csv
+|   ICD9_descriptions
+|   ICD9_umls2020aa
+└───linked_data/
+         └───50/
+               |  dev_50_umls.txt
+               |  test_50_umls.txt
+               |  train_50_umls.txt
+               |  50_cuis_to_discard.pickle (set of all cuis to discard == those pruned out)
+               |  50_unseen_cuis.pickle (set of unseen cuis)
+               |  50_pruned_partitions_dfs_dict.pickle (final pruned partitions dict)
+               |  50_dict_pickle_file_no_unseen.pickle (before pruning rare/freq cuis but without unseen cuis)
+         └───full/
+               |  dev_full_umls.txt
+               |  test_full_umls.txt
+               |  train_full_umls.txt
+               |  full_cuis_to_discard.pickle (set of all cuis to discard == those pruned out)
+               |  full_unseen_cuis.pickle (set of unseen cuis)
+               |  full_pruned_partitions_dfs_dict.pickle (final pruned partitions dict)
+               |  full_dict_pickle_file_no_unseen.pickle (before pruning rare/freq cuis but without unseen cuis)
+└───mimic3/
+         |   NOTEEVENTS.csv
+         |   DIAGNOSES_ICD.csv
+         |   PROCEDURES_ICD.csv
+         |   *_hadm_ids.csv (id files; get from CAML)
+         |   TOP_50_CODES.csv
+         |   semantic_types_mimic.txt
+         |   ...some other files generated during Step 1
+         └───50/
+                  |  dev_50.csv
+                  |  test_50.csv
+                  |  train_50.csv
+         └───full/
+                  |  dev_full.csv
+                  |  test_full.csv
+                  |  train_full.csv
+                  |  vocab.csv
+                  |  disch_full.csv
+```
 
