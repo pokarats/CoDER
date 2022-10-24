@@ -79,14 +79,14 @@ have not tested our experiments with this type of embeddings.
 We conducted preliminary experiments on a rule-based and non-deep-learning models with the **UMLS CUI** input type in 
 order to get a low baseline performance threshold for this type of input. 
 
-Non-DL results as shown in [Baseline Results](/res/README.md#laat-results#non-deep-learning-models) for LR and SVM models with 
+Non-DL results as shown in [Baseline Results](/res/README.md#non-deep-learning-models) for LR and SVM models with 
 **UMLS CUIS** input appear comparable to reported results in [Vu et al (2020)](https://arxiv.org/abs/2007.06351) 
 with **text input** type.
 
 Based on these promising preliminary experiments, we compared **UMLS CUI** input type with **text input** on one of the
 current top-performing DL models for MIMIC-III ICD Coding Task: 
 [Label Attention Model for ICD Coding from Clinical Text (LAAT)](https://arxiv.org/abs/2007.06351). Results are reported
-in the [Result Directory](/res/README.md#laat-results)
+in the [LAAT Baseline Results](/res/README.md#laat-results)
 
 ### Rule-Based
 
@@ -106,16 +106,16 @@ highest similarity score (among scores above a specified threshold, e.g. 0.7) to
 
 Using TFIDF for feature extraction, we experimented with the following Non-DL Models:
 
-- Logistic Regression (LR)
+- **Logistic Regression (LR)**
   - 1-gram
   - up to 2-gram
-- Support Vector Machine (SVM)
+- **Support Vector Machine (SVM)**
   - 1-gram
   - up to 2-gram
-- Stochastic Gradient Descent (SGD)
+- **Stochastic Gradient Descent (SGD)**
   - 1-gram
   - up to 2-gram
-- Stacked (`1-2-gram` only; only for top-50 version)
+- **Stacked** (`1-2-gram` only; only for top-50 version)
   - LR + SGD + SVM
 
 

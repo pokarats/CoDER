@@ -7,6 +7,7 @@
 | No Extension (None) | **45.02** |   18.88   |   19.58    |   26.60    |    12.57    |    15.34    |
 | ALL                 |   16.86   | **26.54** |   18.11    |   20.62    |    9.89     |    11.50    |
 | Best                |   40.71   |   20.34   | **23.75**  | **27.13**  |  **13.07**  |  **15.69**  |
+
 (09/16/2022)
 
 #### Full
@@ -15,6 +16,7 @@
 | No Extension (None) |   8.83    |   14.47   |    2.19    |   10.97    |    1.13     |    5.80     |
 | ALL                 |   8.83    |   14.47   |    2.19    |   10.97    |    1.13     |    5.80     |
 | Best                |   8.83    |   14.47   |    2.19    |   10.97    |    1.13     |    5.80     |
+
 (09/16/2022)
 
 **NOTE:** that for the Full Version, _the extension criteria (finding < 1 ICD label corresponding to input CUIs)_ were
@@ -40,6 +42,7 @@ results reported also in [Vu et al. (2020)](https://arxiv.org/abs/2007.06351). T
 | SVM[^svm] 1-gram         |   51.45   |   43.72   |   43.55    |   47.28    |    79.70    |    81.85    |   46.92   |
 | SVM[^svm] 2-gram         |   67.52   |   41.66   |   45.90    |   51.53    |    84.02    |    86.92    |   53.90   |
 | Stacked[^stacked] 2-gram | **73.79** |   36.34   |   41.80    |   48.70    |    84.94    |  **88.30**  | **55.28** |
+
 (09/17/2022)  
 
 
@@ -66,6 +69,7 @@ and changes to each component as above.
 | SGD[^sgdf] 2-gram |   30.29   |   49.19   |  **8.09**  |    37.50    |    84.72    |    95.94    |    42.08    |
 | SVM[^svmf] 1-gram |   38.43   |   28.66   |    4.63    |    32.83    |    81.54    |    67.49    |    50.81    |
 | SVM[^svmf] 2-gram | **69.51** |   24.95   |    3.61    |    36.72    |    82.91    |    86.43    |    63.71    |
+
 (09/17/2022, 09/20/2022) 
 
 
@@ -91,4 +95,5 @@ as input tokens below.
 | CUI Top50  |   68.75   |   47.38   |   50.55    |   56.10    |    86.16    |    89.26    | 57.50 |
 | Text Full  |   65.70   |   50.64   |    9.87    |   57.20    |    89.84    |    98.56    | 80.91 |
 | CUI Full   |   64.93   |   36.59   |    6.25    |    46.8    |    84.38    |    97.74    | 73.90 |
+
 (Results from 10/15/2022 run on [Git Commit@36dda76](https://github.com/pokarats/CoDER/commit/36dda76d28e2a9606688016a770d0bf1129104fe))
