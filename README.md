@@ -76,7 +76,8 @@ have not tested our experiments with this type of embeddings.
 
 ## Baseline Experiments
 
-We conducted pre-liminary experiments on the following baseline models.
+We conducted preliminary experiments with the UMLS CUI inputs in comparison to text input on the following baseline 
+models.
 
 ### Rule-Based
 

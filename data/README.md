@@ -212,6 +212,11 @@ data
 
 ### UMLS CUIs Input
 
+Vocabulary size (number of unique tokens) per partition and combined before and after pruning:
+
+1. unseen CUIs
+2. too rare and too frequen CUIs
+
 #### Top-50 Version
 
 | Partition |                  Description                  |     Statistics |
