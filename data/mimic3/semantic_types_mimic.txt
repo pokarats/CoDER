@@ -1,0 +1,31 @@
+DEVI|Devices|T074|Medical Device
+ACTI|Activities & Behaviors|T054|Social Behavior
+ACTI|Activities & Behaviors|T051|Event
+PHEN|Phenomena|T070|Natural Phenomenon or Process
+PHEN|Phenomena|T068|Human-caused Phenomenon or Process
+PHEN|Phenomena|T067|Phenomenon or Process
+PHEN|Phenomena|T034|Laboratory or Test Result
+PHEN|Phenomena|T038|Biologic Function
+CHEM|Chemicals & Drugs|T131|Hazardous or Poisonous Substance
+CONC|Concepts & Ideas|T078|Idea or Concept
+CONC|Concepts & Ideas|T169|Functional Concept
+LIVB|Living Beings|T100|Age Group
+LIVB|Living Beings|T101|Patient or Disabled Group
+ANAT|Anatomy|T031|Body Substance
+PHYS|Physiology|T040|Organism Function
+PHYS|Physiology|T032|Organism Attribute
+DISO|Disorders|T190|Anatomical Abnormality
+DISO|Disorders|T184|Sign or Symptom
+DISO|Disorders|T020|Acquired Abnormality
+DISO|Disorders|T048|Mental or Behavioral Dysfunction
+DISO|Disorders|T191|Neoplastic Process
+DISO|Disorders|T046|Pathologic Function
+DISO|Disorders|T019|Congenital Abnormality
+DISO|Disorders|T033|Finding
+DISO|Disorders|T037|Injury or Poisoning
+DISO|Disorders|T047|Disease or Syndrome
+PROC|Procedures|T065|Educational Activity
+PROC|Procedures|T059|Laboratory Procedure
+PROC|Procedures|T058|Health Care Activity
+PROC|Procedures|T060|Diagnostic Procedure
+PROC|Procedures|T061|Therapeutic or Preventive Procedure
