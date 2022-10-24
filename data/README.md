@@ -252,5 +252,5 @@ data
 |           |                total discarded                 |           66654 |
 |           |                     pruned                     |           62942 |
 |           |      % of CUIs pruned from freq. threhold      |           43.44 |
-|           | (8*min: 8** + **max: 115607** freq thresholds) | (43.40 + 0.037) |
+|           | (**min: 8** + **max: 115607** freq thresholds) | (43.40 + 0.037) |
 
