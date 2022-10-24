@@ -83,17 +83,35 @@ We conducted pre-liminary experiments on the following baseline models.
 The most basic baseline for the UMLS CUIs input type. The model takes as input for each sample CUI tokens and output
 ICD-9 codes that also map to CUIs in the input sample.
 
-There are 3 variations to this model
+There are **3 variations** to this model:
 
-- No-Extension (None): if no ICD-9 codes are found, predicted labels are left blank
-- Extension == All: if no ICD-9 codes are found, output ALL ICD-9 codes belonging to the Semantic Type(s) of the CUIs 
+- **No-Extension (None):** if no ICD-9 codes are found, predicted labels are left blank
+- **Extension == All:** if no ICD-9 codes are found, output ALL ICD-9 codes belonging to the Semantic Type(s) of the CUIs 
 in the input
-- Extension == Best: if no ICD-9 codes are found, output only the ICD-9 code of the Semantic Type(s) whose definition 
+- **Extension == Best:** if no ICD-9 codes are found, output only the ICD-9 code of the Semantic Type(s) whose definition 
 has the 
 highest similarity score (among scores above a specified threshold, e.g. 0.7) to the CUIs in the input
 
 ### Non Deep Learning Models
+
+Using TFIDF for feature embedding, we experimented with the following models:
+
+- Logistic Regression (LR)
+  - 1-gram
+  - up to 2-gram
+- Support Vector Machine (SVM)
+  - 1-gram
+  - up to 2-gram
+- Stochastic Gradient
+- Descent (SGD)
+  - 1-gram
+  - up to 2-gram
+- Stacked (up to 2-gram only)
+
 ### LAAT
+
+We implemented the [Vu et al (2020) Label Attention Model for ICD Coding from Clinical Text (LAAT)](https://arxiv.org/abs/2007.06351) 
+following the code in [LAAT GitHub)](https://github.com/aehrc/LAAT).
 
 ### Baseline Results
 #### Rule-Based
