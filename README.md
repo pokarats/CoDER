@@ -76,8 +76,17 @@ have not tested our experiments with this type of embeddings.
 
 ## Baseline Experiments
 
-We conducted preliminary experiments with the UMLS CUI inputs in comparison to text input on the following baseline 
-models.
+We conducted preliminary experiments on a rule-based and non-deep-learning models with the **UMLS CUI** input type in 
+order to get a low baseline performance threshold for this type of input. 
+
+Non DL results as shown in [Baseline Results](#non-deep-learning-models-results) for LR and SVM models with 
+**UMLS CUIS** input appear comparable to reported results in [Vu et al (2020)](https://arxiv.org/abs/2007.06351) 
+with **text input** type.
+
+Based on these promising preliminary experiments, we compared **UMLS CUI** input type with **text input** on one of the
+current top-performing DL models for MIMIC-III ICD Coding Task: 
+[Label Attention Model for ICD Coding from Clinical Text (LAAT)](https://arxiv.org/abs/2007.06351). Results are reported
+[below.](#laat-results)
 
 ### Rule-Based
 
@@ -93,9 +102,9 @@ in the input
 has the 
 highest similarity score (among scores above a specified threshold, e.g. 0.7) to the CUIs in the input
 
-### Non Deep Learning Models
+### Non Deep Learning (DL) Models
 
-Using TFIDF for feature embedding, we experimented with the following models:
+Using TFIDF for feature extraction, we experimented with the following Non-DL Models:
 
 - Logistic Regression (LR)
   - 1-gram
@@ -103,25 +112,87 @@ Using TFIDF for feature embedding, we experimented with the following models:
 - Support Vector Machine (SVM)
   - 1-gram
   - up to 2-gram
-- Stochastic Gradient
-- Descent (SGD)
+- Stochastic Gradient Descent (SGD)
   - 1-gram
   - up to 2-gram
-- Stacked (up to 2-gram only)
+- Stacked (`1-2-gram` only; only for top-50 version)
+  - LR + SGD + SVM
 
-### LAAT
 
-We implemented the [Vu et al (2020) Label Attention Model for ICD Coding from Clinical Text (LAAT)](https://arxiv.org/abs/2007.06351) 
-following the implementation codes in [LAAT GitHub](https://github.com/aehrc/LAAT) and [P4Q_Guttmann_SCT_Coding](https://github.com/suamin/P4Q_Guttmann_SCT_Coding).
+We also experimented with `1-gram` only vs `1-2-gram` tokenization range options for feature extraction in these 
+models, see [TfidfVectorizer Doc](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html). 
+Models and TFIDF Vectorization implemented with [scikit-learn](https://scikit-learn.org/stable/modules/classes.html#module-sklearn.linear_model)
 
-### Baseline Results
-#### Rule-Based
-#### Non Deep Learning Models
-#### LAAT
 
-Our implementation reproduced the results for the **Top-50** and **Full** versions of the dataset for the text input type
-as reported in [Vu et al. (2020)](https://arxiv.org/abs/2007.06351). We also experimented with using UMLS CUIs as input
-tokens.
+### DL Baseline: LAAT
+
+We implemented the [LAAT Model](https://arxiv.org/abs/2007.06351) following their implementation code in 
+[LAAT GitHub](https://github.com/aehrc/LAAT), with modifications from
+[P4Q_Guttmann_SCT_Coding](https://github.com/suamin/P4Q_Guttmann_SCT_Coding). We used all hyperameters as reported in
+their publication.
+
+## Baseline Results
+### Rule-Based Results
+
+#### Top-50 Version
+| Model               | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | Acc (Macro) | Acc (Micro) |
+|---------------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|
+| No Extension (None) | **45.02** |   18.88   |   19.58    |   26.60    |    12.57    |    15.34    |
+| ALL                 |   16.86   | **26.54** |   18.11    |   20.62    |    9.89     |    11.50    |
+| Best                |   40.71   |   20.34   | **23.75**  | **27.13**  |  **13.07**  |  **15.69**  |
+
+(09/16/2022)
+
+#### Full Version
+| Model               | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | Acc (Macro) | Acc (Micro) |
+|---------------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|
+| No Extension (None) |   8.83    |   14.47   |    2.19    |   10.97    |    1.13     |    5.80     |
+| ALL                 |   8.83    |   14.47   |    2.19    |   10.97    |    1.13     |    5.80     |
+| Best                |   8.83    |   14.47   |    2.19    |   10.97    |    1.13     |    5.80     |
+
+(09/16/2022)
+
+**NOTE:** that for the Full Version, _the extension criteria (finding < 1 ICD label corresponding to input CUIs)_ were
+never met. Hence identical results: i.e. No extensions were triggered.
+
+### Non Deep Learning Models Results
+
+#### Top-50 Version
+
+| Model               | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|---------------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| LR[^lrparam] 1-gram |   75.60   |   66.95   |   66.55    |   71.01    |    92.79    |    94.6     | 67.28 |
+| LR[^lrparam] 2-gram |   68.75   |   47.38   |   50.55    |   56.10    |    86.16    |    89.26    | 57.50 |
+| SGD 1-gram          |   65.70   |   50.64   |    9.87    |   57.20    |    89.84    |    98.56    | 80.91 |
+| SGD 2-gram          |   64.93   |   36.59   |    6.25    |    46.8    |    84.38    |    97.74    | 73.90 |
+| SVM 1-gram          |           |           |            |            |             |             |       |
+| SVM 2-gram          |           |           |            |            |             |             |       |
+| Stacked 2-gram      |           |           |            |            |             |             |       |
+(09/17/2022)  
+
+
+[^lrparam]: Used default settings for [scikit-learn 1.0.2](https://scikit-learn.org/1.0/modules/generated/sklearn.linear_model.LogisticRegression.html?highlight=logistic%20regression#sklearn.linear_model.LogisticRegression) 
+except `class_weight=='balanced'`, `C==1000` and `max_iter==1000`.
+
+
+#### Full Version
+
+| Model          | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|----------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| LR 1-gram      |   75.60   |   66.95   |   66.55    |   71.01    |    92.79    |    94.6     | 67.28 |
+| LR 2-gram      |   68.75   |   47.38   |   50.55    |   56.10    |    86.16    |    89.26    | 57.50 |
+| SGD 1-gram     |   65.70   |   50.64   |    9.87    |   57.20    |    89.84    |    98.56    | 80.91 |
+| SGD 2-gram     |   64.93   |   36.59   |    6.25    |    46.8    |    84.38    |    97.74    | 73.90 |
+| SVM 1-gram     |           |           |            |            |             |             |       |
+| SVM 2-gram     |           |           |            |            |             |             |       |
+
+(09/17/2022, 09/20/2022)
+
+### LAAT Results
+
+Our implementation reproduced the results for the **Top-50** and **Full** versions of the dataset for the **text input** 
+type as reported in [Vu et al. (2020)](https://arxiv.org/abs/2007.06351). We report the results from using **UMLS CUIs** 
+as input tokens below.
 
 | Model      | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
 |------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
