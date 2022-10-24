@@ -118,6 +118,19 @@ following the implementation codes in [LAAT GitHub](https://github.com/aehrc/LAA
 #### Non Deep Learning Models
 #### LAAT
 
+Our implementation reproduced the results for the **Top-50** and **Full** versions of the dataset for the text input type
+as reported in [Vu et al. (2020)](https://arxiv.org/abs/2007.06351). We also experimented with using UMLS CUIs as input
+tokens.
+
+| Model      | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Text Top50 |   75.60   |   66.95   |   66.55    |   71.01    |    92.79    |    94.6     | 67.28 |
+| CUI Top50  |   68.75   |   47.38   |   50.55    |   56.10    |    86.16    |    89.26    | 57.50 |
+| Text Full  |   65.70   |   50.64   |    9.87    |   57.20    |    89.84    |    98.56    | 80.91 |
+| CUI Full   |   64.93   |   36.59   |    6.25    |    46.8    |    84.38    |    97.74    | 73.90 |
+
+(Results from 10/15/2022 run on git commit: 36dda76d)
+
 ## Proposed Extensions
 ### KGE
 ### GNN
