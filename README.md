@@ -111,7 +111,7 @@ Using TFIDF for feature embedding, we experimented with the following models:
 ### LAAT
 
 We implemented the [Vu et al (2020) Label Attention Model for ICD Coding from Clinical Text (LAAT)](https://arxiv.org/abs/2007.06351) 
-following the code in [LAAT GitHub)](https://github.com/aehrc/LAAT).
+following the implementation codes in [LAAT GitHub](https://github.com/aehrc/LAAT) and [P4Q_Guttmann_SCT_Coding](https://github.com/suamin/P4Q_Guttmann_SCT_Coding).
 
 ### Baseline Results
 #### Rule-Based
