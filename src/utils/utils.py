@@ -72,7 +72,6 @@ def whole_lines_from_file(file_path):
     Yield line from file path with whitespaces removed
 
     :param file_path: path to file
-    :param delimiter: token type on which to split each line
     :return: each line with whitespaces removed
     """
     with open(file_path) as f:

@@ -32,9 +32,13 @@ logger = logging.getLogger(__name__)
 
 class PrepareData:
     def __init__(self, cl_arg):
+        self.version = cl_arg.version
         self.icd9_umls_fname = Path(cl_arg.data_dir) / 'ICD9_umls2020aa'
         self.linked_data_dir = Path(cl_arg.data_dir) / 'linked_data' / cl_arg.version
         self.preprocessed_data_dir = self.linked_data_dir / 'preprocessed'
+        if not self.preprocessed_data_dir.is_dir() or not self.preprocessed_data_dir.exists():
+            self.preprocessed_data_dir = Path(cl_arg.data_dir) / 'mimic3' / cl_arg.version
+
         self.cuis_to_discard = None
         self.rule_based_name = None
         self.all_icd9 = set()
@@ -64,7 +68,7 @@ class PrepareData:
     def reset_partitions_label_set(self):
         self.all_partitions_icd9 = set()
 
-    def get_all_partitions_icd9(self, partitions=['train', 'dev', 'test'],
+    def get_all_partitions_icd9(self, partitions=('train', 'dev', 'test'),
                                 include_rule_based=False,
                                 filename=None,
                                 add_name='rule-based'):
@@ -112,10 +116,25 @@ class PrepareData:
         return self.dataset_cuis[partition]
 
     def get_partition_labels(self, partition):
-        data_path = self.preprocessed_data_dir / f"{partition}.json"
+        if self.preprocessed_data_dir.name == "preprocessed":
+            data_path = self.preprocessed_data_dir / f"{partition}.json"
+        elif self.preprocessed_data_dir.parent.name == "mimic3":
+            version = self.preprocessed_data_dir.name
+            data_path = self.preprocessed_data_dir / f"{partition}_{version}.csv"
+        else:
+            raise NotImplementedError
         logger.info(f"Get partition icd9 codes from file: {data_path}...")
-        json_data = read_from_json(data_path)
-        partition_labels_df = pd.DataFrame(json_data).drop(labels=['id', 'doc'], axis=1)
+
+        if "json" in data_path.suffix:
+            json_data = read_from_json(data_path)
+            partition_labels_df = pd.DataFrame(json_data).drop(labels=['id', 'doc'], axis=1)
+        elif "csv" in data_path.suffix:
+            partition_labels_df = pd.read_csv(data_path).drop(labels=['SUBJECT_ID', 'HADM_ID', 'TEXT', 'length'],
+                                                              axis=1)
+            partition_labels_df['labels_id'] = partition_labels_df.apply(lambda x: x['LABELS'].split(';'), axis=1)
+        else:
+            raise NotImplementedError
+
         self.dataset_raw_labels[partition] = partition_labels_df['labels_id']
 
         return self.dataset_raw_labels[partition]
@@ -132,16 +151,18 @@ class PrepareData:
         """
         self.rule_based_name = name
         if isinstance(filename, Path) or isinstance(filename, str):
-            if isinstance(filename, Path) and filename.exists():
+            if Path(filename).exists():
                 data_path = filename
-            elif isinstance(filename, str):
+            elif len(Path(filename).parts) == 1:
                 data_path = self.linked_data_dir / f"{filename}"
             else:
                 raise FileNotFoundError
             logger.info(f"Get predicted icd9 codes from file: {data_path}...")
             json_data = read_from_json(data_path)
-        else:
+        elif isinstance(filename, (list, dict)):
             json_data = filename
+        else:
+            raise TypeError(f"Invalid Type for json data")
 
         partition_labels_df = pd.DataFrame(json_data).drop(labels=['id'], axis=1)
         self.dataset_raw_labels[name] = partition_labels_df['labels_id']
