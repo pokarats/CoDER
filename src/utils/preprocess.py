@@ -1,14 +1,14 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+DESCRIPTION: Modification of the original preprocessingg script of the MIMIC-III dataset from MultiResCNN
 
-# ----------------------------------------------------------------------------------------------------------------
-# Slight changes from:
-# 
-# https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/preprocess_mimic3.py
-#
-# and
-#
-# https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
-# ----------------------------------------------------------------------------------------------------------------
+@author: Saadullah Amin, Noon Pokaratsiri Goldstein; this is a slight modification from the code from:
+
+https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/preprocess_mimic3.py
+https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
+
+"""
 
 import operator
 import csv
@@ -17,17 +17,26 @@ import logging
 import nltk
 import pandas as pd
 
-from collections import Counter, defaultdict
+from collections import Counter
 from tqdm import tqdm
 from scipy.sparse import csr_matrix
 from nltk.tokenize import RegexpTokenizer
+from nltk.data import path as nltk_path
+from nltk import download as nltk_download
+from config import PROJ_FOLDER
+
+nltk_tokenizer_path = PROJ_FOLDER / f"scratch/cache/nltk_data"
+if not nltk_tokenizer_path.exists():
+    nltk_tokenizer_path.mkdir(parents=True, exist_ok=False)
+nltk_path.append(str(nltk_tokenizer_path))
+nltk_download('punkt', download_dir=str(nltk_tokenizer_path), raise_on_error=True)
 
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger(__file__)
 
 
-nlp_tool = nltk.data.load('tokenizers/punkt/english.pickle')
+nlp_tool = nltk.data.load('tokenizers/punkt/PY3/english.pickle')
 tokenizer = RegexpTokenizer(r'\w+')
 
 
@@ -309,7 +318,7 @@ def split_data(labeledfile, base_name, mimic_dir):
 
 
 def main():
-    MIMIC_3_DIR = '../../data/mimic3'
+    MIMIC_3_DIR = f"{PROJ_FOLDER / 'data/mimic3'}"
     Y = 'full'
     notes_file = '%s/NOTEEVENTS.csv' % MIMIC_3_DIR
     
@@ -472,6 +481,8 @@ def main():
         df['length'] = df.apply(lambda row: len(str(row['TEXT']).split()), axis=1)
         df = df.sort_values(['length'])
         df.to_csv('%s/%s_%s.csv' % (MIMIC_3_DIR, splt, str(Y)), index=False)
+
+    logger.info("finished!")
 
 
 if __name__=="__main__":

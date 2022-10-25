@@ -1,25 +1,52 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+DESCRIPTION: Evaluation metrics as reported in cited papers + HEMKIT
+
+@author: Saadullah Amin, Noon Pokaratsiri Goldstein; this is a modification from the code from:
+
+
+https://github.com/jamesmullenbach/caml-mimic/blob/master/evaluation.py
+https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
+https://gist.github.com/dwiuzila/b2d5a7cfb7e1b19fc0c3713636939e8e#file-score-py
+
+"""
 
 # ----------------------------------------------------------------------------------------------------------------
-# Adopted from:
-#
-# https://github.com/jamesmullenbach/caml-mimic/blob/master/evaluation.py
-#
-# and
-#
-# https://github.com/foxlf823/Multi-Filter-Residual-Convolutional-Neural-Network/blob/master/utils.py
+
 # ----------------------------------------------------------------------------------------------------------------
 
 import numpy as np
 import os
 import logging
+import pandas as pd
 
 from pathlib import Path
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, precision_recall_fscore_support
 
 
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger(__file__)
+
+
+def simple_score(yhat, y, index, metrics_average='weighted'):
+    """
+    Calculate simple precision, recall, and f1 score from sklearn
+
+    :param yhat: predicted labels
+    :type yhat: iterable of binarized labels
+    :param y: true labels
+    :type y: iterable of binarized labels
+    :param index: this will be pd DataFrame index column
+    :type index: str
+    :param metrics_average: average param for precision, recall, fscore weighted, micro, macro
+    :type metrics_average: str
+    :return:
+
+    """
+
+    metrics = precision_recall_fscore_support(y, yhat, average=metrics_average, zero_division=0)
+    performance = {'precision': metrics[0], 'recall': metrics[1], 'f1': metrics[2]}
+    return pd.DataFrame(performance, index=[f"{index}_{metrics_average}"])
 
 
 def union_size(yhat, y, axis):
@@ -272,36 +299,32 @@ def hierarchical_metrics(y, yhat, hierarchy_path, hier_dist=10000, hier_err=5):
 def log_metrics(metrics):
     print()
     if "auc_macro" in metrics.keys():
-        logger.info("[MACRO] accuracy, precision, recall, f-measure, AUC")
         logger.info(
-            "%.4f, %.4f, %.4f, %.4f, %.4f" % (
+            "[MACRO]\naccuracy\tprecision\trecall\tf-measure\tAUC\n%.4f\t%.4f\t%.4f\t%.4f\t%.4f" % (
                 metrics["acc_macro"], metrics["prec_macro"], 
                 metrics["rec_macro"], metrics["f1_macro"], 
                 metrics["auc_macro"]
             )
         )
     else:
-        logger.info("[MACRO] accuracy, precision, recall, f-measure")
         logger.info(
-            "%.4f, %.4f, %.4f, %.4f" % (
+            "[MACRO]\naccuracy\tprecision\trecall\tf-measure\n%.4f\t%.4f\t%.4f\t%.4f" % (
                 metrics["acc_macro"], metrics["prec_macro"], 
                 metrics["rec_macro"], metrics["f1_macro"]
             )
         )
     
     if "auc_micro" in metrics.keys():
-        logger.info("[MICRO] accuracy, precision, recall, f-measure, AUC")
         logger.info(
-            "%.4f, %.4f, %.4f, %.4f, %.4f" % (
+            "[MICRO]\naccuracy\tprecision\trecall\tf-measure\tAUC\n%.4f\t%.4f\t%.4f\t%.4f\t%.4f" % (
                 metrics["acc_micro"], metrics["prec_micro"], 
                 metrics["rec_micro"], metrics["f1_micro"], 
                 metrics["auc_micro"]
             )
         )
     else:
-        logger.info("[MICRO] accuracy, precision, recall, f-measure")
         logger.info(
-            "%.4f, %.4f, %.4f, %.4f" % (
+            "[MICRO]\naccuracy\tprecision\trecall\tf-measure\n%.4f\t%.4f\t%.4f\t%.4f" % (
                 metrics["acc_micro"], metrics["prec_micro"], 
                 metrics["rec_micro"], metrics["f1_micro"]
             )
@@ -337,16 +360,21 @@ def test():
         [0, 1, 0, 1, 1],
         [0, 0, 1, 0, 1]
     ], dtype=np.float32)
+    # where output from yhat_raw > 0.5
     yhat = np.array([
         [0, 1, 0, 0, 0],
         [0, 0, 1, 0, 1],
         [0, 0, 1, 0, 1]
     ], dtype=np.float32)
+    # output of sigmoid functions
     yhat_raw = np.array([
         [0.21, 0.85, 0.11, 0.03, 0.01],
         [0.33, 0.25, 0.98, 0.20, 0.75],
         [0.13, 0.23, 0.89, 0.27, 0.78],
     ], dtype=np.float32)
+    # will need to be created for the mimic3 dataset (results will differ between full vs top50)
+    # each row: parent, child
+    # read the HEMKIT readme.txt
     dummy_hier = np.array([
         [10, 20], 
         [20,  1],
@@ -370,4 +398,9 @@ def test():
 
 
 if __name__=="__main__":
+    """
+    if error during testing, make sure to delete "hier.txt" file in the HEMKit dir for first run
+    """
+    logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+    logger = logging.getLogger(__file__)
     test()

@@ -1,0 +1,50 @@
+244.9	C0020676	T047	Hypothyroidism
+250.00	C0375113	T047	Diabetes mellitus without mention of complication, type II or unspecified type, not stated as uncontrolled
+276.1	C0020645	T033	Hyposmolality and/or hyponatremia
+285.1	C0154298	T047	Acute posthaemorrhagic anaemia
+285.9	C0002871	T047	Anemia
+287.5	C0040034	T047	Thrombocytopenia
+305.1	C0040336	T048	Tobacco Use Disorder
+311	C0868892	T048	Depressive disorder, NEC in ICD9CM_2014
+33.24	C0176511	T060	Closed [endoscopic] biopsy of bronchus
+37.23	C0189898	T060	Catheterization of both left and right heart
+38.91	C0007431	T061	Arterial catheterization
+38.93	C0162203	T058	Venous catheterization, not elsewhere classified
+39.61	C0015355	T061	Extracorporeal circulation auxiliary to open heart surgery
+39.95	C0019004	T061	Hemodialysis
+401.9	C0085580	T047	Essential Hypertension
+403.90	C0494574	T047	Hypertensive renal disease, unspecified, without mention of renal failure
+410.71	C0155657	T047	Acute myocardial infarction, subendocardial infarction, initial episode of care
+412	C0155668	T047	Old myocardial infarction
+45.13	C0029611	T060	Other endoscopy of small intestine
+496	C0302378	T047	Chronic airway obstruction, NEC in ICD9CM_2014
+507.0	C0260334	T047	Pneumonitis due to food and vomit
+511.9	C0032227	T047	Pleural effusion disorder
+530.81	C0017168	T047	Gastroesophageal reflux disease
+584.9	C0022660	T047	Kidney Failure, Acute
+585.9	C1561643	T047	Chronic Kidney Diseases
+88.56	C0202861	T060	Coronary arteriography using two catheters
+88.72	C0013516	T060	Echocardiography
+96.6	C0014329	T061	Enteral infusion of concentrated nutritional substances
+96.71	C2349744	T061	Continuous invasive mechanical ventilation for less than 96 consecutive hours
+96.72	C2349745	T061	Continuous invasive mechanical ventilation for 96 consecutive hours or more
+99.04	C0178192	T061	Packed blood cell transfusion
+99.15	C0030548	T061	Parenteral Nutrition, Total
+995.92	C1719672	T047	Severe Sepsis
+V45.81	C0032811	T033	Encounter due to postsurgical aortocoronary bypass status
+V58.61	C2911178	T033	Encounter for long-term (current) use of anticoagulants
+038.9	C0036690	T047	Septicemia
+37.22	C0189897	T060	Catheterization of left heart
+36.15	C0021781	T061	Internal Mammary-Coronary Artery Anastomosis
+272.4	C0348494	T047	Other hyperlipidemia
+276.2	C0001122	T046	Acidosis
+414.01	C0837134	T047	Coronary atherosclerosis of native coronary artery
+424.0	C0026265	T047	Diseases of mitral valve
+428.0	C0018802	T047	Congestive heart failure
+96.04	C0021932	T061	Intubation, Intratracheal
+599.0	C0042029	T047	Urinary tract infection
+V15.82	C0040335	T033	Encounter due to tobacco use
+427.31	C0004238	T047	Atrial Fibrillation
+486	C0339951	T047	Pneumonia, organism unspecified
+518.81	C0264490	T047	Acute respiratory failure
+272.0	C0678189	T047	Hyperlipidemia, group A

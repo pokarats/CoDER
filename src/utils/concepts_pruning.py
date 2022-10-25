@@ -1,18 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: Python template with an argument parser and logger. Put all the "main" logic into the method called "main".
-             Only use the true "__main__" section to add script arguments. The logger writes to a hidden folder './log/'
-             and uses the name of this file, followed by the date (by default). The argument parser comes with a default
-             option --quiet to keep the stdout clean.
-
-@copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
-            Intelligenz GmbH or its licensors, as applicable.
+DESCRIPTION: prune out CUIs that do not belong to the Semantic Types (TUIs) of the ICD9 codes of the MIMIC-III dataset
+and CUIs in the `dev` or `test` sets not seen in `train` set. (i.e. no zero-shot CUIs). Also prune too rare and too
+frequent CUIs based on normalized frequency thresholds.
 
 @author: Noon Pokaratsiri Goldstein, adapted from code by Saadullah Amin
 """
 
 import sys
+import os
+import platform
 import time
 from datetime import date
 import logging
@@ -20,12 +18,17 @@ import argparse
 import traceback
 import collections
 import json
-import pickle
 
 from scispacy.umls_linking import UmlsEntityLinker
 from pathlib import Path
 from tqdm import tqdm
 
+if platform.system() != 'Darwin':
+    sys.path.append(os.getcwd())  # only needed for slurm
+from src.utils.utils import get_freq_distr_plots, pickle_obj, get_dataset_semantic_types, prune_dfs_dict
+
+
+logger = logging.getLogger(__name__)
 
 ICD9_SEMANTIC_TYPES = [
     'T017', 'T019', 'T020', 'T021', 'T022',
@@ -44,52 +47,6 @@ ICD9_SEMANTIC_TYPES = [
     'T197', 'T200', 'T201', 'T203'
 ]
 
-
-def lines_from_file(file_path, delimiter="|"):
-    """
-    Yield line from file path with trailing whitespaces removed
-
-    :param file_path: path to file
-    :param delimiter: token type on which to split each line
-    :return: each line with trailing whitespaces removed
-    """
-    with open(file_path) as f:
-        for line in f:
-            yield line.rstrip().split(delimiter)
-
-
-def pickle_obj(obj_to_pickle, args_cl):
-    """
-
-    :param obj_to_pickle:
-    :param args_cl: parse args dict
-    :return: None
-    """
-    data_folder = Path(args_cl.mimic3_dir)
-    pickle_file = data_folder / f"{args_cl.version}_{args_cl.pickle_file}.pickle"
-    with open(pickle_file, 'wb') as handle:
-        pickle.dump(obj_to_pickle, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-    with open(pickle_file, 'rb') as handle:
-        pickled = pickle.load(handle)
-
-    assert(obj_to_pickle == pickled), f"Pickled object not the same as original!!"
-    logger.info(f"All cuis_to_discard set pickled to: {pickle_file}")
-
-
-def get_dataset_semantic_types(file_path):
-    """
-    File should contain semantic types in the dataset (e.g. MIMIC-III)
-
-    :param file_path:
-    :return: List of semantic types from dataset to be included
-    :rtype: List
-    """
-
-    # each line is has this format: DEVI|Devices|T074|Medical Device, 3rd item is the semantic type
-    return [sem_type[2] for sem_type in lines_from_file(file_path)]
-
-
 def get_dataset_icd9_sem_types(file_path):
     """
     Keep only the semantic types in the dataset at file_path that correspond to possible ICD9 codes' semantic types
@@ -107,7 +64,7 @@ class ConceptCorpusReader:
     Read linked_data corpus file for a specified split and obtain counts for each UMLS entity in each doc/sample
     """
 
-    def __init__(self, mimic3_dir, split, version, threshold):
+    def __init__(self, mimic3_dir, split, version, threshold=None):
 
         """
 
@@ -120,12 +77,19 @@ class ConceptCorpusReader:
         self.umls_fname = Path(mimic3_dir) / f'{split}_{version}_umls.txt'
         self.docidx_to_concepts = dict()
         # [doc idx][sent id]: [((s1, e1), [concept1, concept2, ...]),(s2, e2,), [concept1, concept2, ...]]
-        self.confidence_threshold = threshold if threshold is not None else 0.0
+        #self.docidx_to_concepts_simple = dict()
+        # [doc idx]: {concept1, concept2, concept3, ....}
+        self.docidx_to_ordered_concepts = dict()
+        # [doc idx]: [list of concepts in the order of how they appear in the sample, can repeat]
+        self.confidence_threshold = threshold if threshold is not None else 0.7
+        # 0.7 is the default used in the concepts_linking.py
 
     def read_umls_file(self):
         """
         Extract entities from each sentence in each doc and store in a dict mapping doc_id, sent_id to list of
         UMLS entities
+
+
 
         :return:
 
@@ -140,10 +104,18 @@ class ConceptCorpusReader:
                 doc_id, sent_id = list(map(int, uid.split("_")))
                 if doc_id not in self.docidx_to_concepts:
                     self.docidx_to_concepts[doc_id] = dict()
+                    # self.docidx_to_concepts_simple[doc_id] = set()
+                    self.docidx_to_ordered_concepts[doc_id] = []
                 self.docidx_to_concepts[doc_id][sent_id] = [
                     ((item['s'], item['e']), [ents[0] for ents in item['umls_ents']
                                               if float(ents[-1]) > self.confidence_threshold]) for item in line[uid]
                 ]
+                #self.docidx_to_concepts_simple[doc_id].update([ents[0] for item in line[uid] for ents in item['umls_ents']
+                                              #if float(ents[-1]) > self.confidence_threshold])
+                self.docidx_to_ordered_concepts[doc_id].extend([ents[0] for item in line[uid] for ents in item['umls_ents']
+                                              if float(ents[-1]) > self.confidence_threshold])
+                # each 'umls_ents' is a list of lists --> [[cui1, confidence score1],[cui2, confidence score2], ...]
+                # ents[0] gets the cui, ents[-1] gets the confidence score
 
     def concept_dfs(self):
         """
@@ -224,6 +196,50 @@ def get_unseen_cuis_to_discard(partition_dfs):
     return only_in_dev.union(only_in_test)
 
 
+def get_min_max_threshold(partition_dfs_counters, partition="train"):
+    """
+
+    :param partition_dfs_counters: Dict of Counters for all partitions
+    :param partition: name of partition, train, dev, or test
+    :return: min threshold, max threshold
+    :rtype: tuple
+    """
+    top_100 = partition_dfs_counters[partition].most_common(100)
+    lowest = partition_dfs_counters[partition].most_common()[::-1]
+
+    logger.info(f"Top 100 concepts freq in {partition}: \n{top_100}")
+    #logger.info(f"Least frequent 1000 concepts in {partition}: \n{lowest_100}")
+
+    # dict of normalized frequency
+    total_freq = sum(partition_dfs_counters[partition].values())
+    num_unique_cuis = len(partition_dfs_counters[partition])
+    logger.info(f"Total concept counts in {partition}: {total_freq}")
+    logger.info(f"Total unique concepts in {partition}: {num_unique_cuis}")
+
+    # find out absolute freq for max and min where max is > 1500x/1million and min is 0.1x/1million
+    top_100_normalized = [(cui, freq * 1000000.00 / total_freq) for (cui, freq) in top_100 if freq * 1000000.00 / total_freq >= 1500]
+    lowest_normalized = [(cui, freq * 1000000.00 / total_freq) for (cui, freq) in lowest if freq * 1000000.00 / total_freq >= 0.1]
+    logger.info(f"Normalized top 100 cuis freq: in {partition}: \n{top_100_normalized[:100]}")
+    logger.info(f"Normalzied lowest cuis freq: in {partition}: \n{lowest_normalized[:100]}")
+
+    # find the freq of the cui in the lowest_normalized
+    min_threshold = partition_dfs_counters[partition][lowest_normalized[0][0]]
+    logger.info(f"min frequency threshold: {min_threshold}")
+    num_unique_cuis_to_discarded = len([cui for cui, freq in partition_dfs_counters[partition].items() if freq < min_threshold])
+    percent_cuis_to_discard = num_unique_cuis_to_discarded * 100.00 / num_unique_cuis
+    logger.info(f"Discarding based on min frequency threshold amonts to: {percent_cuis_to_discard} % of cuis")
+
+    # find the freq of the cui in the top normalized
+    max_threshold = partition_dfs_counters[partition][top_100_normalized[-1][0]]
+    logger.info(f"max frequency threshold: {max_threshold}")
+    num_unique_cuis_above_max = len([cui for cui, freq in partition_dfs_counters[partition].items() if freq > max_threshold])
+    percent_cuis_above_max = num_unique_cuis_above_max * 100.00 / num_unique_cuis
+    logger.info(f"Discarding based on max frequency threshold amonts to: {percent_cuis_above_max} % of cuis")
+    logger.info(f"total discarded cuis amount to: {percent_cuis_to_discard + percent_cuis_above_max} % of cuis")
+
+    return min_threshold, max_threshold
+
+
 def add_rare_and_freq_cuis_to_discard(partition_dfs, split, min_threshold=5, max_threshold=4000):
     """
     Make a set of cuis that are either too rare or too frequent according to specified min/max thresholds
@@ -271,9 +287,10 @@ def add_non_icd9_cuis_to_discard(partition_dfs, split, dataset_icd9_sem_types, s
     for cui in tqdm(partition_dfs[split].keys()):
         if any(tui not in dataset_icd9_sem_types for tui in spacy_umls_linker.kb.cui_to_entity[cui].types):
             # kb.cui_to_entity[cui] maps to scispacy.linking_utils.Entity class, which is a NamedTuple
-            # see https://github.com/allenai/scispacy/scispacy/linking_utils.py from commit@583e35e
+            # see https://github.com/allenai/scispacy/blob/main/scispacy/linking_utils.py from commit@583e35e
             # spacy_umls_linker.kb.cui_to_entity[cui].types can also be index accessed:
             # spacy_umls_linker.kb.cui_to_entity[cui][3]
+            # spacy_umls_linker.kb.cui_to_entity[cui].types is a List of Str as 1 cui can have multiple tui's
             cuis_to_discard.add(cui)
 
     logger.info(f"No. of unique concepts in {split} to discard: {len(cuis_to_discard)}")
@@ -289,23 +306,47 @@ def main(cl_args):
     logger.info(f"TUIs in MIMIC corresponding to ICD9 codes:\n{mimic_icd9_tuis}")
 
     # get cui freq for all splits
-    all_partitions_dfs = get_dataset_dfs(cl_args.mimic3_dir, ["train", "dev", "test"], "50")
+    all_partitions_dfs = get_dataset_dfs(cl_args.mimic3_dir, ["train", "dev", "test"], cl_args.version)
+    pickle_obj(all_partitions_dfs, cl_args, cl_args.dict_pickle_file)
+
+    # prune out unseen, too rare/frequent cuis, and cuis whose types not in icd9 types (for a specific partition/split)
+    logger.info('Determining cuis to discard...')
+    unseen_cuis = get_unseen_cuis_to_discard(all_partitions_dfs)
+    pickle_obj(unseen_cuis, cl_args, cl_args.misc_pickle_file)
+
+    prune_dfs_dict(all_partitions_dfs, unseen_cuis)
+    logger.info(f'Number of unique concepts in train without unseen cuis: {len(all_partitions_dfs["train"])}')
+    logger.info(f'Number of unique concepts in dev without unseen cuis: {len(all_partitions_dfs["dev"])}')
+    logger.info(f'Number of unique concepts in test without unseen cuis: {len(all_partitions_dfs["test"])}')
+
+    pickle_obj(all_partitions_dfs, cl_args, "dict_pickle_file_no_unseen")
+    min_threshold, max_threshold = get_min_max_threshold(all_partitions_dfs)
+
+    unseen_rare_freq_cuis = unseen_cuis.union(add_rare_and_freq_cuis_to_discard(all_partitions_dfs,
+                                                                                cl_args.split,
+                                                                                min_threshold,
+                                                                                max_threshold))
 
     logger.info('Loading SciSpacy UmlsEntityLinker ...')
     linker = UmlsEntityLinker(name=cl_args.linker_name)
-
-    # prune out unseen, too rare/frequent cuis, and cuis whose types not in icd9 types (for a specific partition/split)
-    unseen_cuis = get_unseen_cuis_to_discard(all_partitions_dfs)
-    unseen_rare_freq_cuis = unseen_cuis.union(add_rare_and_freq_cuis_to_discard(all_partitions_dfs, cl_args.split))
     cuis_to_discard = unseen_rare_freq_cuis.union(add_non_icd9_cuis_to_discard(all_partitions_dfs,
                                                                                cl_args.split,
                                                                                mimic_icd9_tuis,
                                                                                linker))
 
     logger.info(f"No. of all unique concepts to discard: {len(cuis_to_discard)}")
+    prune_dfs_dict(all_partitions_dfs, cuis_to_discard)
+    logger.info(f'Number of unique concepts in train after pruning: {len(all_partitions_dfs["train"])}')
+    logger.info(f'Number of unique concepts in dev after pruning: {len(all_partitions_dfs["dev"])}')
+    logger.info(f'Number of unique concepts in test after pruning: {len(all_partitions_dfs["test"])}')
 
     # pickle cuis to discard for version
-    pickle_obj(cuis_to_discard, cl_args)
+    pickle_obj(cuis_to_discard, cl_args, cl_args.pickle_file)
+    pickle_obj(all_partitions_dfs, cl_args, cl_args.dict_pickle_file)
+
+    # plot freq distribution for the pruned train parition
+    get_freq_distr_plots(all_partitions_dfs, "train", save_fig=True)
+
 
     lapsed_time = (time.time() - start_time) // 60
     logger.info(f"Took {lapsed_time} minutes!")
@@ -315,12 +356,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--mimic3_dir", action="store", type=str, default="../../data/linked_data/top50",
+        "--mimic3_dir", action="store", type=str, default="data/linked_data/1",
         help="Path to MIMIC-III data directory containing processed versions with linked_data"
              "of the top-50 and full train/dev/test splits."
     )
     parser.add_argument(
-        "--version", action="store", type=str, default="50",
+        "--version", action="store", type=str, default="1",
         help="Name of mimic-III dataset version to use: full vs 50 (for top50) or 1 for a 1 sample version"
     )
     parser.add_argument(
@@ -328,7 +369,7 @@ if __name__ == "__main__":
         help="Partition name: train, dev, test"
     )
     parser.add_argument(
-        "--split_file", action="store", type=str, default="train_50",
+        "--split_file", action="store", type=str, default="train_1",
         choices=[
             "train_full", "dev_full", "test_full",
             "train_50", "dev_50", "test_50", "dev_1"
@@ -350,12 +391,20 @@ if __name__ == "__main__":
              "variable ``SCISPACY_CACHE``."
     )
     parser.add_argument(
-        "--semantic_type_file", action="store", type=str, default="../../data/mimic3/semantic_types_mimic.txt",
+        "--semantic_type_file", action="store", type=str, default="data/mimic3/semantic_types_mimic.txt",
         help="Path to file containing semantic types in the MIMIC-III dataset"
     )
     parser.add_argument(
-        "--pickle_file", action="store", type=str, default="cuis_to_discard",
-        help="Path to file containing semantic types in the MIMIC-III dataset"
+        "--pickle_file", action="store", type=str, default="cuis_to_discard_1",
+        help="Path to pickle file for set of cuis to discard"
+    )
+    parser.add_argument(
+        "--dict_pickle_file", action="store", type=str, default="pruned_partitions_dfs_dict_1",
+        help="Path to pickle file for partitions dfs dict of counters"
+    )
+    parser.add_argument(
+        "--misc_pickle_file", action="store", type=str, default="unseen_cuis",
+        help="Path to miscellaneous pickle file e.g. for set of unseen cuis to discard"
     )
     parser.add_argument(
         "--n_process", action="store", type=int, default=48,
@@ -374,7 +423,8 @@ if __name__ == "__main__":
 
     # Setup logging and start timer
     basename = Path(__file__).stem
-    log_folder = Path(f"../../scratch/.log/{date.today():%y_%m_%d}")
+    proj_folder = Path(__file__).resolve().parent.parent.parent
+    log_folder = proj_folder / f"scratch/.log/{date.today():%y_%m_%d}"
     log_file = log_folder / f"{time.strftime('%Hh%Mm%Ss')}_{basename}.log"
 
     if not log_folder.exists():

@@ -1,4 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+DESCRIPTION: Link UMLS CUIs entity to doc text via SciSpacy.
+
+
+@author: Saadullah Amin
+"""
 
 import spacy
 import os
@@ -152,7 +159,7 @@ if __name__=="__main__":
         help="SciSpacy model to use for UMLS concept linking."
     )
     parser.add_argument(
-        "--cache_dir", action="store", type=str, default="/netscratch/samin/cache/scispacy",
+        "--cache_dir", action="store", type=str, default="/scratch/cache/scispacy",
         help="Path to SciSpacy cache directory. Optionally, set the environment "
         "variable ``SCISPACY_CACHE``."
     )
