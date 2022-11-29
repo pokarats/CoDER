@@ -79,11 +79,13 @@ class DataReader:
                  vocab_fn="processed_train_full.json",
                  max_seq_length=4000,
                  doc_iterator=None,
-                 umls_iterator=None):
+                 umls_iterator=None,
+                 second_vocab_fn=None):
         self.data_dir = Path(data_dir) / f"{version}"
         self.linked_data_dir = self.data_dir.parent.parent / "linked_data" / f"{version}" \
-            if input_type == "umls" else None
+            if (input_type == "umls" or input_type == "combined") else None
         self.w2v_dir = (Path(data_dir) / "model") if input_type == "text" else (self.linked_data_dir.parent / "model")
+        self.txt_w2v_dir = (Path(data_dir) / "model")
         self.input_type = input_type
 
         # data file paths
@@ -104,13 +106,13 @@ class DataReader:
 
         # if cui as input, get umls file paths for getting doc texts, id, len
         # id and labels will still come from .csv text file
-        if self.input_type == "umls":
+        if self.input_type == "umls" or self.input_type == "combined":
             self.prune_cui = prune_cui
             self.cui_prune_file = self.linked_data_dir / (f"{version}_cuis_to_discard.pickle" if cui_prune_file is None
                                                           else cui_prune_file)
-            self.umls_train_file = self.linked_data_dir / f"train_{version}_{input_type}.txt"
-            self.umls_dev_file = self.linked_data_dir / f"dev_{version}_{input_type}.txt"
-            self.umls_test_file = self.linked_data_dir / f"test_{version}_{input_type}.txt"
+            self.umls_train_file = self.linked_data_dir / f"train_{version}_umls.txt"
+            self.umls_dev_file = self.linked_data_dir / f"dev_{version}_umls.txt"
+            self.umls_test_file = self.linked_data_dir / f"test_{version}_umls.txt"
             self.umls_doc_iterator = MimicCuiDocIter if umls_iterator is None else umls_iterator
             self.umls_doc_split_path = dict(train=self.umls_train_file,
                                             dev=self.umls_dev_file,
@@ -118,16 +120,26 @@ class DataReader:
 
         # load input to feature word 2 id vocab json saved from word_embedding step
         # file name convention for .json from word_embedding step same for umls and text versions
-        try:
-            vocab_fname = self.w2v_dir / (f"processed_full_{input_type}_pruned.json" if vocab_fn is None else vocab_fn)
-        except FileNotFoundError:
-            print(f"No vocab file, NEED to make word to index dict from vocab...")
-            # TODO: make_vocab_dict function from vocab.csv or cui vocab file
-            # for now error exit
-            sys.exit(1)
+        # for combined input version, need 2 .json filenames, 1 for each version (umls and text)
+        if self.input_type == "combined":
+            umls_vocab_fname = self.w2v_dir / (f"processed_full_umls_pruned.json" if vocab_fn is None else
+                                               vocab_fn)
+            txt_vocab_fname = self.txt_w2v_dir / (f"processed_full_text_pruned.json" if second_vocab_fn is None
+                                                  else second_vocab_fn)
+            self.featurizer = Features(json.load(open(f"{umls_vocab_fname}")))
+            self.txt_featurizer = Features(json.load(open(f"{txt_vocab_fname}")))
+        else:
+            try:
+                vocab_fname = self.w2v_dir / (f"processed_full_{input_type}_pruned.json" if vocab_fn is None else
+                                              vocab_fn)
+            except FileNotFoundError:
+                print(f"No vocab file, NEED to make word to index dict from vocab...")
+                # TODO: make_vocab_dict function from vocab.csv or cui vocab file
+                # for now error exit
+                sys.exit(1)
 
-        # load json vocab mapping word to indx, tokens not in vocab will be replaced with unk token
-        self.featurizer = Features(json.load(open(f"{vocab_fname}")))
+            # load json vocab mapping word to indx, tokens not in vocab will be replaced with unk token
+            self.featurizer = Features(json.load(open(f"{vocab_fname}")))
         self.max_seq_length = max_seq_length
 
         # store doc_id to labels and split stats: min, max, mean num tokens/doc
@@ -156,8 +168,23 @@ class DataReader:
                 input_ids = self.featurizer.convert_tokens_to_features(tokens, self.max_seq_length)
                 self.doc2labels[doc_id] = doc_labels
                 yield doc_id, input_ids, self.mlb.transform([doc_labels])
+        elif self.input_type == "combined":
+            umls_doc_iter = self.umls_doc_iterator(self.umls_doc_split_path[split],
+                                                   threshold=0.7,
+                                                   pruned=self.prune_cui,
+                                                   discard_cuis_file=self.cui_prune_file)
+            text_doc_iter = self.doc_iterator(self.doc_split_path[split])
+            for (text_data), (umls_data) in zip(text_doc_iter, umls_doc_iter):
+                doc_id, txt_doc_sents, doc_labels, txt_doc_len = text_data
+                u_id, u_sents, u_len = umls_data
+                txt_tokens = itertools.chain.from_iterable(txt_doc_sents)
+                txt_input_ids = self.txt_featurizer.convert_tokens_to_features(txt_tokens, self.max_seq_length)
+                umls_tokens = itertools.chain.from_iterable(u_sents)
+                umls_input_ids = self.featurizer.convert_tokens_to_features(umls_tokens, self.max_seq_length)
+                self.doc2labels[doc_id] = doc_labels
+                yield doc_id, txt_input_ids, umls_input_ids, self.mlb.transform([doc_labels])
         else:
-            raise ValueError(f"Invalid input_type option!")
+            raise NotImplementedError(f"Invalid input_type option!")
 
     def get_dataset_stats(self, split):
         if self.split_stats[split].get('mean') is not None:
@@ -170,12 +197,23 @@ class DataReader:
                                       self.umls_doc_iterator(self.umls_doc_split_path[split],
                                                              pruned=self.prune_cui,
                                                              discard_cuis_file=self.cui_prune_file)]))
+        elif self.input_type == "combined":
+            txt_doc_lens = list(map(int, self.doc_iterator(self.doc_split_path[split], slice_pos=4)))
+            umls_doc_lens = list(map(int, [doc_data[2] for doc_data in
+                                      self.umls_doc_iterator(self.umls_doc_split_path[split],
+                                                             pruned=self.prune_cui,
+                                                             discard_cuis_file=self.cui_prune_file)]))
         else:
-            raise ValueError(f"Invalid input_type option!")
+            raise NotImplementedError(f"Invalid input_type option!")
 
-        self.split_stats[split]['min'] = np.min(doc_lens)
-        self.split_stats[split]['max'] = np.max(doc_lens)
-        self.split_stats[split]['mean'] = np.mean(doc_lens)
+        if self.input_type == "combined":
+            self.split_stats[split]['min'] = (np.min(txt_doc_lens), np.min(umls_doc_lens))
+            self.split_stats[split]['max'] = (np.max(txt_doc_lens), np.max(umls_doc_lens))
+            self.split_stats[split]['mean'] = (np.mean(txt_doc_lens), np.max(umls_doc_lens))
+        else:
+            self.split_stats[split]['min'] = np.min(doc_lens)
+            self.split_stats[split]['max'] = np.max(doc_lens)
+            self.split_stats[split]['mean'] = np.mean(doc_lens)
 
         return self.split_stats[split]
 
@@ -217,6 +255,31 @@ class Dataset(data.Dataset):
         return padded_input_ids, label_ids
 
 
+class CombinedDataset(Dataset):
+    """
+    Same as Dataset class, but self.data will come from a combined dataset. Re-define __getitem__ to return both txt and
+    umls input tokens based on DataReader.get_dataset(split) function in line 220.
+
+    mimic_collate_fn is also re-defined to return padded txt and umls input ids along with labrl_ids
+    """
+    def __getitem__(self, index):
+        doc_id, txt_input_ids, umls_input_ids, labels_bin = self.data[index]
+        return txt_input_ids, umls_input_ids, labels_bin
+
+    @staticmethod
+    def mimic_collate_fn(dataset_batch):
+        txt_input_ids, umls_input_ids, label_ids = list(zip(*dataset_batch))
+        txt_input_ids = list(map(torch.LongTensor, txt_input_ids))  # dtype: torch.int64
+        umls_input_ids = list(map(torch.LongTensor, umls_input_ids))  # dtype: torch.int64
+        label_ids = list(map(torch.Tensor, label_ids))  # dtype: torch.float32
+
+        padded_txt_input_ids = pad_sequence(txt_input_ids, batch_first=True)  # shape: batch_size x max_seq_len in txt batch
+        padded_umls_input_ids = pad_sequence(umls_input_ids, batch_first=True)  # shape: batch_size x max_seq_len in umls batch
+        label_ids = torch.cat(label_ids, dim=0)  # shape: batch_size x num label classes
+
+        return padded_txt_input_ids, padded_umls_input_ids, label_ids
+
+
 def get_dataloader(dataset, batch_size, shuffle, collate_fn=Dataset.mimic_collate_fn, num_workers=8):
     data_loader = data.DataLoader(
         dataset=dataset,
@@ -229,11 +292,11 @@ def get_dataloader(dataset, batch_size, shuffle, collate_fn=Dataset.mimic_collat
     return data_loader
 
 
-def get_data(batch_size=8, **kwargs):
+def get_data(batch_size=8, dataset_class=Dataset, collate_fn=Dataset.mimic_collate_fn, **kwargs):
     dr = DataReader(**kwargs)
-    train_data_loader = get_dataloader(Dataset(dr.get_dataset('train'), dr.mlb), batch_size, True)
-    dev_data_loader = get_dataloader(Dataset(dr.get_dataset('dev'), dr.mlb), batch_size, False)
-    test_data_loader = get_dataloader(Dataset(dr.get_dataset('test'), dr.mlb), batch_size, False)
+    train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'), dr.mlb), batch_size, True, collate_fn)
+    dev_data_loader = get_dataloader(dataset_class(dr.get_dataset('dev'), dr.mlb), batch_size, False, collate_fn)
+    test_data_loader = get_dataloader(dataset_class(dr.get_dataset('test'), dr.mlb), batch_size, False, collate_fn)
     return dr, train_data_loader, dev_data_loader, test_data_loader
 
 
@@ -250,13 +313,9 @@ if __name__ == '__main__':
         print(f"id: {d_id}, x: {x}\n, y: {y}")
     check_data_loader = True
     if check_data_loader:
-        dr, trd, dvd, ted = get_data(batch_size=8,
-                                     data_dir="../../data/mimic3",
-                                     version="50",
-                                     input_type="umls",
-                                     prune_cui=True,
-                                     cui_prune_file=None,
-                                     vocab_fn="processed_full_umls_pruned.json")
+        dr, trd, dvd, ted = get_data(batch_size=8, dataset_class=Dataset, collate_fn=Dataset.mimic_collate_fn,
+                                     data_dir="../../data/mimic3", version="50", input_type="umls", prune_cui=True,
+                                     cui_prune_file=None, vocab_fn=None)
         temp = iter(trd)
         x, y = next(temp)
         print(f"x shape: {x.shape}, type: {x.dtype}\n")
@@ -268,3 +327,17 @@ if __name__ == '__main__':
         print(dr.get_dataset_stats('train'))
 
         print(np.transpose(np.nonzero(y)))
+    check_combined_data_loader = True
+    if check_combined_data_loader:
+        dr, trd, dvd, ted = get_data(batch_size=8, dataset_class=CombinedDataset,
+                                     collate_fn=CombinedDataset.mimic_collate_fn, data_dir="../../data/mimic3",
+                                     version="50", input_type="combined", prune_cui=True, cui_prune_file=None,
+                                     vocab_fn=None)
+        temp = iter(trd)
+        x_txt, x_umls, y = next(temp)
+        print(f"x_txt shape: {x_txt.shape}, type: {x_txt.dtype}\n")
+        print(x_txt)
+        print(f"x_umls shape: {x_umls.shape}, type: {x_umls.dtype}\n")
+        print(x_umls)
+        print(f"y shape: {y.shape}, type: {y.dtype}\n")
+        print(y)
