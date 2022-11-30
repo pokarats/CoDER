@@ -20,6 +20,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+
 # not used
 class Aggregator(nn.Module):
     def __init__(self, combined_n, out_dim):
@@ -113,44 +114,32 @@ class CombinedLAAT(LAAT):
         cui_batch_size = x_cui.size()[0]
         assert txt_batch_size == cui_batch_size
 
-        # text input embedding part
-        txt_embedded = self.word_embed(x_txt)  # b x txt seq len x de
-        txt_embedded = self.dropout(txt_embedded)  # per LAAT paper, dropout applied to embedding step
+        # init lstm h, c layers (can use either txt or cui batch size as both have the same batch size)
+        lstm_hidden = self.init_lstm_hidden(txt_batch_size)
 
-        # pack padded sequence
-        txt_embedded = nn.utils.rnn.pack_padded_sequence(txt_embedded, txt_seq_lengths, batch_first=True,
-                                                         enforce_sorted=False)
-        txt_lstm_hidden = self.init_lstm_hidden(txt_batch_size)
-        self.bilstm.flatten_parameters()
-        H_txt, _ = self.bilstm(txt_embedded, txt_lstm_hidden)  # b x seq txt n x 2u <-- dim of unpacked H
+        # hidden layers after bilstm for both cui and txt input types
+        combined_H = []
+        for embedding_weights, input_tokens_ids, seq_lengths in zip([self.word_embed, self.cui_embed],
+                                                                    [x_txt, x_cui],
+                                                                    [txt_seq_lengths, cui_seq_lengths]):
+            embedded = embedding_weights(input_tokens_ids)  # b x txt/cui seq len x de
+            embedded = self.dropout(embedded)  # per LAAT paper, dropout applied to embedding step
 
-        # pad packed output H
-        H_txt, txt_unpacked_lengths = nn.utils.rnn.pad_packed_sequence(H_txt, batch_first=True)
-        assert torch.equal(txt_seq_lengths, txt_unpacked_lengths)
-
-        # cui input embedding part
-        cui_embedded = self.cui_embed(x_cui)  # b x cui seq len x de
-        cui_embedded = self.dropout(cui_embedded)
-
-        # pack padded cui sequence
-        cui_embedded = nn.utils.rnn.pack_padded_sequence(cui_embedded, cui_seq_lengths, batch_first=True,
-                                                         enforce_sorted=False)
-        cui_lstm_hidden = self.init_lstm_hidden(cui_batch_size)
-        H_cui, _ = self.bilstm(cui_embedded, cui_lstm_hidden)  # b x seq cui n x 2u <-- dim of unpacked H
-
-        # cui pad packed output H
-        H_cui, cui_unpacked_lengths = nn.utils.rnn.pad_packed_sequence(H_cui, batch_first=True)
-        assert torch.equal(cui_seq_lengths, cui_unpacked_lengths)
+            embedded = nn.utils.rnn.pack_padded_sequence(embedded, seq_lengths, batch_first=True, enforce_sorted=False)
+            H, _ = self.bilstm(embedded, lstm_hidden)  # b x seq txt/cui n x 2u <-- dim of unpacked H
+            H, unpacked_lengths = nn.utils.rnn.pad_packed_sequence(H, batch_first=True)
+            assert torch.equal(seq_lengths, unpacked_lengths)
+            combined_H.append(H)
 
         # LAAT layers for both cui and txt input types
         combined_V = []
-        for H in [H_txt, H_cui]:
+        for H in combined_H:
             Z = torch.tanh(self.W(H))  # b x n x da
             A = torch.softmax(self.U(Z), dim=1)  # b x n x L, softmax along dim=1 so that each col in L sums to 1!!
-            V = H.transpose(1, 2).bmm(A)  # b x 2u x L
+            V = H.transpose(1, 2).bmm(A)  # b x 2u x L, each V has this dim
             combined_V.append(V)
 
-        combined_V = torch.cat(combined_V, dim=1)  # b x 4u x L
+        combined_V = torch.cat(combined_V, dim=1)  # b x 4u x L <-- concat along dim 1 so 2u + 2u == 4u
         # print(combined_V.size())
         V = self.aggregator(combined_V.transpose(1, 2))  # b x L x 2u
         # print(V.size())
@@ -170,24 +159,26 @@ class CombinedLAAT(LAAT):
 
 if __name__ == '__main__':
     # test that weights from stored .npy would still work with nn.Embedding.from_pretrained
-    #try:
-    #    random_np_weights = np.load('testing_np_saved_weights.npy')
-    #except FileNotFoundError:
-    #    random_np_weights = 10 + 2.5 * np.random.randn(32, 100)
+    try:
+        random_np_weights = np.load('testing_np_saved_weights.npy')
+    except FileNotFoundError:
+        random_np_weights = 10 + 2.5 * np.random.randn(32, 100)
+        random_np_weights_two = 10 + 2.5 * np.random.randn(32, 100)
 
-    #if random_np_weights.min() < 0:
-    #    random_np_weights += abs(random_np_weights.min()) + 1
+    if random_np_weights.min() < 0:
+        random_np_weights += abs(random_np_weights.min()) + 1
     # do NOT use torch.from_numpy here if original np array is float64, will get dtype error later on!
     # torch.Tensor == torch.FloatTensor, gets dtype torch.float32 even if np dtype is float64
-    #weights_from_np = torch.Tensor(random_np_weights)
+    weights_from_np = torch.Tensor(random_np_weights)
+    weights_from_np_two = torch.Tensor(random_np_weights_two)
 
     # testing pre-trained weights, torch.FloatTensor dtype torch.float32
     random_weights = torch.FloatTensor(32, 100).random_(1, 16)
     random_weights_two = torch.FloatTensor(32, 100).random_(1, 16)
 
     model = CombinedLAAT(n_txt=32, n_cui=32, de=100, L=5, u=256, da=256, dropout=0.3,
-                         txt_pre_trained_weights=random_weights,
-                         cui_pre_trained_weights=random_weights_two, trainable=True)
+                         txt_pre_trained_weights=weights_from_np,
+                         cui_pre_trained_weights=weights_from_np_two, trainable=True)
 
     x_txt = torch.LongTensor(8, 16).random_(1, 31)
     x_cui = torch.LongTensor(8, 16).random_(1, 31)
