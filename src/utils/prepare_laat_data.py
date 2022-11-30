@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: Prepare Dataloader for LAAT model for MIMIC-III text and UMLS CUI input versions.
+DESCRIPTION: Prepare Dataloader for LAAT model for MIMIC-III text, UMLS CUI, and combined input versions.
 
 @author: Noon Pokaratsiri Goldstein
 
@@ -52,6 +52,15 @@ def convert_ids_to_tokens(inv_vocab, ids):
 class Features:
 
     def __init__(self, vocab, unk_token="<UNK>", pad_token="<PAD>"):
+        """
+
+        :param vocab: json dict mapping token to ids
+        :type vocab: dict
+        :param unk_token: unknown token
+        :type unk_token: str
+        :param pad_token: padding token
+        :type pad_token: str
+        """
         self.vocab = vocab
         self.inv_vocab = {v: k for k, v in self.vocab.items()}
         self.unk_token = unk_token
@@ -80,7 +89,32 @@ class DataReader:
                  max_seq_length=4000,
                  doc_iterator=None,
                  umls_iterator=None,
-                 second_vocab_fn=None):
+                 second_txt_vocab_fn=None):
+        """
+
+        :param data_dir:
+        :type data_dir:
+        :param version: full or 50 version of the MIMIC-III dataset
+        :type version: str
+        :param input_type: text, umls, or combined
+        :type input_type: str
+        :param prune_cui: param for MimicCuiDocIter - True if prune cui according to set of cuis in prune file
+        :type prune_cui: bool
+        :param cui_prune_file: name of {version}_cuis_to_discard.pickle file containing set of cuis to discard
+        (NOT file path) from cui pruning step; should be in data/linked_data/{version}/
+        :type cui_prune_file: str
+        :param vocab_fn: name of the .json file containing the w2v vocab mapping str/cui to id (NOT file path) generated
+        from word_embeddings step; should be in data/{linked_data|mimic3}/model/ (for combined input_type, this MUST be
+        for UMLS vocab mapping file)
+        :type vocab_fn: str
+        :param max_seq_length: 4000 (per LAAT paper) or other threshold for max number of tokens in input text/cuis
+        :type max_seq_length: int
+        :param doc_iterator: txt input MimicDocIter
+        :param umls_iterator: umls input MimicCuiDocIter
+        :param second_txt_vocab_fn: only for combined input_type, txt w2v .json vocab mapping str to id file name
+        (NOT path)
+        :type second_txt_vocab_fn: str
+        """
         self.data_dir = Path(data_dir) / f"{version}"
         self.linked_data_dir = self.data_dir.parent.parent / "linked_data" / f"{version}" \
             if (input_type == "umls" or input_type == "combined") else None
@@ -124,8 +158,8 @@ class DataReader:
         if self.input_type == "combined":
             umls_vocab_fname = self.w2v_dir / (f"processed_full_umls_pruned.json" if vocab_fn is None else
                                                vocab_fn)
-            txt_vocab_fname = self.txt_w2v_dir / (f"processed_full_text_pruned.json" if second_vocab_fn is None
-                                                  else second_vocab_fn)
+            txt_vocab_fname = self.txt_w2v_dir / (f"processed_full_text_pruned.json" if second_txt_vocab_fn is None
+                                                  else second_txt_vocab_fn)
             self.featurizer = Features(json.load(open(f"{umls_vocab_fname}")))
             self.txt_featurizer = Features(json.load(open(f"{txt_vocab_fname}")))
         else:
@@ -187,6 +221,13 @@ class DataReader:
             raise NotImplementedError(f"Invalid input_type option!")
 
     def get_dataset_stats(self, split):
+        """
+        min, max, mean token count for the given split
+        For combined input_type the stats are given as a tuple with the first number being txt input stats
+        :param split: train, dev, test
+        :type split: str
+        :return: value of dict[split]
+        """
         if self.split_stats[split].get('mean') is not None:
             return self.split_stats[split]
 
@@ -200,9 +241,9 @@ class DataReader:
         elif self.input_type == "combined":
             txt_doc_lens = list(map(int, self.doc_iterator(self.doc_split_path[split], slice_pos=4)))
             umls_doc_lens = list(map(int, [doc_data[2] for doc_data in
-                                      self.umls_doc_iterator(self.umls_doc_split_path[split],
-                                                             pruned=self.prune_cui,
-                                                             discard_cuis_file=self.cui_prune_file)]))
+                                           self.umls_doc_iterator(self.umls_doc_split_path[split],
+                                                                  pruned=self.prune_cui,
+                                                                  discard_cuis_file=self.cui_prune_file)]))
         else:
             raise NotImplementedError(f"Invalid input_type option!")
 
@@ -220,10 +261,10 @@ class DataReader:
     def get_dataset(self, split):
         """
         Get indexable iterable of dataset split
-        :param split:
-        :type split:
-        :return: List of (doc_id, input_ids, binarized_labels)
-        :rtype:
+        :param split: train, dev, or test
+        :type split: str
+        :return: List of (doc_id, input_ids, binarized_labels) for text or umls input_type or List of
+        (doc_id, txt_input_ids, cui_input_ids, binarized_labels) for combined input_type
         """
 
         return list(self._fit_transform(split))
@@ -301,7 +342,7 @@ def get_data(batch_size=8, dataset_class=Dataset, collate_fn=Dataset.mimic_colla
 
 
 if __name__ == '__main__':
-    check_data_reader = False
+    check_data_reader = True
     if check_data_reader:
         data_reader = DataReader(data_dir="../../data/mimic3",
                                  version="50",
@@ -311,6 +352,7 @@ if __name__ == '__main__':
                                  vocab_fn="processed_full_umls_pruned.json")
         d_id, x, y = data_reader.get_dataset('train')[0]
         print(f"id: {d_id}, x: {x}\n, y: {y}")
+        train_stats = data_reader.get_dataset_stats("train")
     check_data_loader = True
     if check_data_loader:
         dr, trd, dvd, ted = get_data(batch_size=8, dataset_class=Dataset, collate_fn=Dataset.mimic_collate_fn,
