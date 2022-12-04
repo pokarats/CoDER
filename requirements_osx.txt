@@ -21,3 +21,5 @@ requests==2.27.1
 sacred==0.8.2
 neptune-client==0.16.8
 neptune-sacred==0.10.0
+dgl==0.4.3
+dglke==0.1.2
