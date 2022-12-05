@@ -20,6 +20,3 @@ python-dotenv==0.21.0
 sacred==0.8.2
 neptune-client==0.16.8
 neptune-sacred==0.10.0
---find-links https://data.dgl.ai/wheels-test/repo.html
-dgl-cu116>=0.5.0,<=0.9
-dglke
