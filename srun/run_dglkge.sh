@@ -4,7 +4,7 @@
 export DGLBACKEND=pytorch
 export CUDA_VISIBLE_DEVICES=0
 MYDATA=/netscratch/pokarats/ds
-IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_dglkge.sqsh
+IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.03-py3_dglkgesource.sqsh
 NUM_CPUS=8
 MEM=32GB
 
