@@ -1,7 +1,7 @@
 conda
 jupyterlab==2.3.2
-torch==1.12.0+cuda102
-torchvision==0.13.0+cu102
+torch==1.12.0+cuda116
+torchvision==0.13.0+cu116
 torchaudio==0.12.0
 scikit-learn
 matplotlib==3.5.1
@@ -19,5 +19,5 @@ python-dotenv==0.21.0
 sacred==0.8.2
 neptune-client==0.16.8
 neptune-sacred==0.10.0
-dgl-cu102>=0.5.0,<=0.9.1
+dgl-cu116>=0.5.0,<=0.9.1
 dglke
