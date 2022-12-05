@@ -2,6 +2,7 @@
 
 # SLURM environment arguments
 export DGLBACKEND=pytorch
+export CUDA_VISIBLE_DEVICES=0
 MYDATA=/netscratch/pokarats/ds
 IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_dglkge.sqsh
 NUM_CPUS=8
@@ -9,10 +10,10 @@ MEM=32GB
 
 # variables for srun and python
 
-vers="snomed_ct_base"
+vers="snomed_ct_transel2_base"
 echo "Submitting version: $vers kge"
 
-srun -K -p RTXA6000-MLT \
+srun -K -p RTX3090-MLT \
   --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
   --container-workdir="$(pwd)" \
   --container-image=$IMAGE \
