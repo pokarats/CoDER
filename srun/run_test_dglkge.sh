@@ -14,7 +14,7 @@ MEM=32GB
 vers="test_dglke_base"
 echo "Submitting version: $vers kge"
 
-srun -K -p RTXA6000-MLT \
+srun -K -p RTX3090-MLT \
   --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
   --container-workdir="$(pwd)" \
   --container-image=$IMAGE \
