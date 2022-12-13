@@ -379,7 +379,7 @@ if __name__ == '__main__':
         dr, trd, dvd, ted = get_data(batch_size=8, dataset_class=CombinedDataset,
                                      collate_fn=CombinedDataset.mimic_collate_fn, data_dir="../../data/mimic3",
                                      version="50", input_type="combined", prune_cui=True,
-                                     cui_prune_file="50_cuis_to_discard_snomednorel.pickle",
+                                     cui_prune_file="50_cuis_to_discard_snomedbase.pickle",
                                      vocab_fn=None)
         temp = iter(trd)
         x_txt, x_umls, y = next(temp)
