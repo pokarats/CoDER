@@ -117,7 +117,7 @@ class DataReader:
         """
         self.data_dir = Path(data_dir) / f"{version}"
         self.linked_data_dir = self.data_dir.parent.parent / "linked_data" / f"{version}" \
-            if (input_type == "umls" or input_type == "combined") else None
+            if ("umls" in input_type or input_type == "combined") else None
         self.w2v_dir = (Path(data_dir) / "model") if input_type == "text" else (self.linked_data_dir.parent / "model")
         self.txt_w2v_dir = (Path(data_dir) / "model")
         self.input_type = input_type
@@ -140,7 +140,7 @@ class DataReader:
 
         # if cui as input, get umls file paths for getting doc texts, id, len
         # id and labels will still come from .csv text file
-        if self.input_type == "umls" or self.input_type == "combined":
+        if "umls" in self.input_type or self.input_type == "combined":
             self.prune_cui = prune_cui
             self.cui_prune_file = self.linked_data_dir / (f"{version}_cuis_to_discard.pickle" if cui_prune_file is None
                                                           else cui_prune_file)
@@ -164,6 +164,9 @@ class DataReader:
             self.txt_featurizer = Features(json.load(open(f"{txt_vocab_fname}")))
         else:
             try:
+                # if input_type is NOT "umls" e.g. umls_kge etc. User MUST provide vocab_fn param!!
+                # this is even if using the same .json file as "umls" w2v embedding model
+                # e.g. processed_full_umls_pruned.json for input_type == "umls_kge"
                 vocab_fname = self.w2v_dir / (f"processed_full_{input_type}_pruned.json" if vocab_fn is None else
                                               vocab_fn)
             except FileNotFoundError:
@@ -189,7 +192,7 @@ class DataReader:
                 self.doc2labels[doc_id] = doc_labels
                 yield doc_id, input_ids, self.mlb.transform([doc_labels])
 
-        elif self.input_type == "umls":
+        elif "umls" in self.input_type:
             umls_doc_iter = self.umls_doc_iterator(self.umls_doc_split_path[split],
                                                    threshold=0.7,
                                                    pruned=self.prune_cui,
@@ -233,7 +236,7 @@ class DataReader:
 
         if self.input_type == "text":
             doc_lens = list(map(int, self.doc_iterator(self.doc_split_path[split], slice_pos=4)))
-        elif self.input_type == "umls":
+        elif "umls" in self.input_type:
             doc_lens = list(map(int, [doc_data[2] for doc_data in
                                       self.umls_doc_iterator(self.umls_doc_split_path[split],
                                                              pruned=self.prune_cui,
@@ -354,10 +357,12 @@ if __name__ == '__main__':
         print(f"id: {d_id}, x: {x}\n, y: {y}")
         train_stats = data_reader.get_dataset_stats("train")
     check_data_loader = True
+    # checking snomed prune file
     if check_data_loader:
         dr, trd, dvd, ted = get_data(batch_size=8, dataset_class=Dataset, collate_fn=Dataset.mimic_collate_fn,
-                                     data_dir="../../data/mimic3", version="50", input_type="umls", prune_cui=True,
-                                     cui_prune_file=None, vocab_fn=None)
+                                     data_dir="../../data/mimic3", version="50", input_type="umls_kge", prune_cui=True,
+                                     cui_prune_file="50_cuis_to_discard_snomednorel.pickle",
+                                     vocab_fn="processed_full_umls_pruned.json")
         temp = iter(trd)
         x, y = next(temp)
         print(f"x shape: {x.shape}, type: {x.dtype}\n")
@@ -373,7 +378,8 @@ if __name__ == '__main__':
     if check_combined_data_loader:
         dr, trd, dvd, ted = get_data(batch_size=8, dataset_class=CombinedDataset,
                                      collate_fn=CombinedDataset.mimic_collate_fn, data_dir="../../data/mimic3",
-                                     version="50", input_type="combined", prune_cui=True, cui_prune_file=None,
+                                     version="50", input_type="combined", prune_cui=True,
+                                     cui_prune_file="50_cuis_to_discard_snomednorel.pickle",
                                      vocab_fn=None)
         temp = iter(trd)
         x_txt, x_umls, y = next(temp)

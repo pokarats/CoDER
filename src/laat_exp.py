@@ -94,6 +94,7 @@ def text_cfg():
     data_dir = PROJ_FOLDER / "data"
     version = "50"
     input_type = "text"
+    embedding_type = "umls"
     mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
 
     if input_type == "text":
@@ -112,7 +113,16 @@ def text_cfg():
 
     # load model params are separate into sections below
     batch_size = 8
-    embedding_path = model_dir / f"processed_full_{input_type}_pruned.npy"
+    if input_type == "text":
+        embedding_path = model_dir / "processed_full_text_pruned.npy"
+    elif input_type == "umls":
+        embedding_path = model_dir / f"processed_full_{embedding_type}_pruned.npy"
+
+    else:
+        # combined embedding types
+        txt_embedding_path = Path(mimic_dir).parent / "model" / "processed_full_text_pruned.npy"
+        cui_embedding_path = model_dir / f"processed_full_{embedding_type}_pruned.npy"
+
 
     # LAAT model params, n, de, L, pre_trained_weights defined in load_model captured function
     laat_params = dict(u=256,
