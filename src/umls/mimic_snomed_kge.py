@@ -121,8 +121,9 @@ def main(cl_args):
 
     snomed_rel_coverage, mimic_2snomedidx_map, mimic_idx2idx, no_rel_cuis_set = check_overlap(snomed_fpath, mimic_fpath)
     logger.info(f"{1 - snomed_rel_coverage} of Mimic CUIs have SNOMED CT relations!")
-    write_to_json(mimic_2snomedidx_map, cuimap_fpath, indent=None)
-    write_to_json(mimic_idx2idx, idxmap_fpath, indent=None)
+    if cl_args.update_model:
+        write_to_json(mimic_2snomedidx_map, cuimap_fpath, indent=None)
+        write_to_json(mimic_idx2idx, idxmap_fpath, indent=None)
 
     if len(no_rel_cuis_set) > 0:
         logger.info(f"{len(no_rel_cuis_set)} CUIs added to discard set.")
@@ -132,8 +133,9 @@ def main(cl_args):
         combined_discard_cuis = no_rel_cuis_set.union(existing_discard_cuis)
         pickle_obj(combined_discard_cuis, cl_args, cl_args.which_pickle)
 
-    updated_npy_fpath = update_embeddings(cl_args.w2v_npy, cl_args.kge_npy, mimic_idx2idx, cl_args.save_fname)
-    logger.info(f".npy weights where entities have SNOMED CT relations saved to {updated_npy_fpath}\n")
+    if cl_args.update_model:
+        updated_npy_fpath = update_embeddings(cl_args.w2v_npy, cl_args.kge_npy, mimic_idx2idx, cl_args.save_fname)
+        logger.info(f".npy weights where entities have SNOMED CT relations saved to {updated_npy_fpath}\n")
 
 
 if __name__ == '__main__':
@@ -185,6 +187,10 @@ if __name__ == '__main__':
         "--which_pickle", action="store", type=str,
         default="cuis_to_discard_snomedke",
         help="filename keyword for saving new <version>_<which_pickle>.pickle file; obj to pickle is a set"
+    )
+    parser.add_argument(
+        "--update_model", action="store_true",
+        help="Update/Rewrite .json and .npy files in model; files will be overwritten!"
     )
     parser.add_argument(
         "--quiet", action="store_true",
