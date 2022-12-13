@@ -15,7 +15,7 @@ DESCRIPTION: Python template with an argument parser and logger. Put all the "ma
 LAAT Model as proposed by Vu et al. 2020 (https://www.ijcai.org/proceedings/2020/461)
 
 """
-from laat import LAAT
+from src.models.laat import LAAT
 import torch
 import torch.nn as nn
 import numpy as np
