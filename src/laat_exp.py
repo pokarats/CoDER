@@ -25,8 +25,9 @@ if platform.system() != 'Darwin':
     sys.path.append(os.getcwd())  # only needed for slurm
 
 from models.laat import LAAT
+from models.combined_laat import CombinedLAAT
 from models.train_eval_laat import train, evaluate, generate_preds_file
-from utils.prepare_laat_data import get_data, Dataset
+from utils.prepare_laat_data import get_data, Dataset, CombinedDataset
 from utils.config import PROJ_FOLDER, MODEL_FOLDER, DEV_API_KEY
 from utils.eval import all_metrics
 from neptune.new.integrations.sacred import NeptuneObserver
@@ -53,18 +54,27 @@ ex.observers.append(NeptuneObserver(run=neptune_run))
 @ex.capture
 def load_model(_log,
                embedding_path,
+               cui_embedding_path,
                batch_size,
                dr_params,
                laat_params):
-
     _log.info(f"Loading pre_trained embedding weights from {embedding_path}")
     embed_matrix = np.load(f"{embedding_path}")
     w2v_weights_from_np = torch.Tensor(embed_matrix)
 
-    dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size,
-                                                                        Dataset,
-                                                                        Dataset.mimic_collate_fn,
-                                                                        **dr_params)
+    # for combined text and cui model
+    if cui_embedding_path is not None:
+        cui_embed_matrix = np.load(f"{cui_embedding_path}")
+        cui_w2v_weights_from_np = torch.Tensor(cui_embed_matrix)
+        dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size,
+                                                                            CombinedDataset,
+                                                                            CombinedDataset.mimic_collate_fn,
+                                                                            **dr_params)
+    else:
+        dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size,
+                                                                            Dataset,
+                                                                            Dataset.mimic_collate_fn,
+                                                                            **dr_params)
     _log.info(f"Vocab size: {len(dr.featurizer.vocab)}\n"
               f"Embedding Dim: {embed_matrix.shape[1]}\n"
               f"Num Labels: {len(dr.mlb.classes_)}\n")
@@ -74,13 +84,25 @@ def load_model(_log,
               f"Dev Partition ({len(dev_data_loader.dataset)} samples):\n{dr.get_dataset_stats('dev')}\n"
               f"Test Partition ({len(test_data_loader.dataset)} samples):\n{dr.get_dataset_stats('test')}\n")
 
-    laat_params = {"n": len(dr.featurizer.vocab),
-                   "de": embed_matrix.shape[1],
-                   "L": len(dr.mlb.classes_),
-                   "pre_trained_weights": w2v_weights_from_np,
-                   **laat_params}
+    if cui_embedding_path is not None:
+        laat_params = {"n": len(dr.txt_featurizer.vocab),
+                       "n_cui": len(dr.featurizer.vocab),
+                       "de": embed_matrix.shape[1],
+                       "L": len(dr.mlb.classes_),
+                       "pre_trained_weights": w2v_weights_from_np,
+                       "cui_pre_trained_weights": cui_w2v_weights_from_np,
+                       **laat_params}
 
-    model = LAAT(**laat_params)
+        model = CombinedLAAT(**laat_params)
+
+    else:
+        laat_params = {"n": len(dr.featurizer.vocab),
+                       "de": embed_matrix.shape[1],
+                       "L": len(dr.mlb.classes_),
+                       "pre_trained_weights": w2v_weights_from_np,
+                       **laat_params}
+
+        model = LAAT(**laat_params)
 
     return model, train_data_loader, dev_data_loader, test_data_loader
 
@@ -96,6 +118,7 @@ def text_cfg():
     input_type = "text"
     embedding_type = "umls"
     mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
+    cui_embedding_path = None
 
     if input_type == "text":
         model_dir = Path(mimic_dir).parent / "model"
@@ -120,9 +143,8 @@ def text_cfg():
 
     else:
         # combined embedding types
-        txt_embedding_path = Path(mimic_dir).parent / "model" / "processed_full_text_pruned.npy"
+        embedding_path = Path(mimic_dir).parent / "model" / "processed_full_text_pruned.npy"
         cui_embedding_path = model_dir / f"processed_full_{embedding_type}_pruned.npy"
-
 
     # LAAT model params, n, de, L, pre_trained_weights defined in load_model captured function
     laat_params = dict(u=256,
@@ -183,6 +205,7 @@ def run_eval_pred():
 
 @ex.main
 def run_laat(embedding_path,
+             cui_embedding_path,
              batch_size,
              dr_params,
              laat_params,
@@ -194,28 +217,29 @@ def run_laat(embedding_path,
              eval_only,
              _log,
              _run):
-
-    model, train_data_loader, dev_data_loader, test_data_loader = load_model(embedding_path=embedding_path,
+    model, train_data_loader, dev_data_loader, test_data_loader = load_model(_log,
+                                                                             embedding_path=embedding_path,
+                                                                             cui_embedding_path=cui_embedding_path,
                                                                              batch_size=batch_size,
                                                                              dr_params=dr_params,
                                                                              laat_params=laat_params)
     model = model.to(device)
     print(model)
     version = dr_params["version"]
-    model_save_fname = f"filtered_{version}_{Path(embedding_path).stem}_LAAT"
+    model_save_fname = f"filtered_{version}_{dr_params['input_type']}_{Path(embedding_path).stem}_LAAT"
 
     if not eval_only:
         _log.info(f"{'=' * 10}LAAT TRAINING STARTED{'=' * 10}")
         tr_ep_num, tr_f1_scores, tr_eval_data = zip(*train(train_data_loader,
-                                                    dev_data_loader,
-                                                    model,
-                                                    epochs,
-                                                    lr,
-                                                    device=device,
-                                                    _run=_run,
-                                                    early_stop=early_stop,
-                                                    grad_clip=grad_clip,
-                                                    model_save_fname=model_save_fname))
+                                                           dev_data_loader,
+                                                           model,
+                                                           epochs,
+                                                           lr,
+                                                           device=device,
+                                                           _run=_run,
+                                                           early_stop=early_stop,
+                                                           grad_clip=grad_clip,
+                                                           model_save_fname=model_save_fname))
 
     _log.info(f"{'=' * 10}LAAT EVALUATION STARTED{'=' * 10}")
     saved_model_path = MODEL_FOLDER / f'best_{model_save_fname}.pt'

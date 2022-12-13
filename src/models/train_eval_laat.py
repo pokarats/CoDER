@@ -76,9 +76,9 @@ def train(
             for step, batch in enumerate(tqdm(train_dataloader, desc="Train Batch Iteration")):
 
                 batch = tuple(tensor.to(device) for tensor in batch)
-                inputs, labels = batch
+                *inputs, labels = batch  # inputs can be just 1 type or 2 types if runnign the CombinedLAAT model
 
-                labels_logits, labels_loss = model(inputs, labels)
+                labels_logits, labels_loss = model(*inputs, labels)
                 loss = labels_loss
                 if step % 100 == 0:
                     _run.log_scalar("training/batch/loss", labels_loss.item(), step)
@@ -162,10 +162,10 @@ def evaluate(dataloader, model, device, threshold=0.5, no_labels=False):
             if no_labels:
                 b_inputs = batch
             else:
-                b_inputs, b_labels = batch  # b_inputs torch.int64, b_labels torch.float32
+                *b_inputs, b_labels = batch  # b_inputs torch.int64, b_labels torch.float32
 
             if not no_labels:
-                b_labels_logits, b_labels_loss = model(b_inputs, b_labels)
+                b_labels_logits, b_labels_loss = model(*b_inputs, b_labels)
                 avg_loss += b_labels_loss.item()
             else:
                 b_labels_logits = model(b_inputs)

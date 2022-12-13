@@ -49,7 +49,7 @@ class Aggregator(nn.Module):
 
 class CombinedLAAT(LAAT):
     def __init__(self,
-                 n_txt,
+                 n,
                  n_cui,
                  de,
                  L,
@@ -57,15 +57,15 @@ class CombinedLAAT(LAAT):
                  da=256,
                  dropout=0.3,
                  pad_idx=0,
-                 txt_pre_trained_weights=None,
+                 pre_trained_weights=None,
                  cui_pre_trained_weights=None,
                  trainable=False):
         """
         parameter names follow the variables in the LAAT paper, unless otherwise explained
 
-        :param n_txt: vocab size of text corpus, should be the same as (len(wv.vocab.keys()) + 2; 2 for unk and pad, i.e.
+        :param n: vocab size of text corpus, should be the same as (len(wv.vocab.keys()) + 2; 2 for unk and pad, i.e.
         this should be == loaded_np_array.shape[0] ) (for text input)
-        :type n_txt: int
+        :type n: int
         :param n_cui: vocab size of cui corpus, should be the same as (len(wv.vocab.keys()) + 2; 2 for unk and pad, i.e.
         this should be == loaded_np_array.shape[0] (for cui input)
         :param de: word embedding size for each w_i/cui_i token in doc D (both embeddings MUST be of the same size
@@ -79,14 +79,14 @@ class CombinedLAAT(LAAT):
         :param dropout:
         :type dropout:
         """
-        super().__init__(n=n_txt,
+        super().__init__(n=n,
                          de=de,
                          L=L,
                          u=u,
                          da=da,
                          dropout=dropout,
                          pad_idx=pad_idx,
-                         pre_trained_weights=txt_pre_trained_weights,
+                         pre_trained_weights=pre_trained_weights,
                          trainable=trainable)
         self.cui_embed = nn.Embedding.from_pretrained(cui_pre_trained_weights,
                                                       padding_idx=pad_idx,
@@ -176,8 +176,8 @@ if __name__ == '__main__':
     random_weights = torch.FloatTensor(32, 100).random_(1, 16)
     random_weights_two = torch.FloatTensor(32, 100).random_(1, 16)
 
-    model = CombinedLAAT(n_txt=32, n_cui=32, de=100, L=5, u=256, da=256, dropout=0.3,
-                         txt_pre_trained_weights=weights_from_np,
+    model = CombinedLAAT(n=32, n_cui=32, de=100, L=5, u=256, da=256, dropout=0.3,
+                         pre_trained_weights=weights_from_np,
                          cui_pre_trained_weights=weights_from_np_two, trainable=True)
 
     x_txt = torch.LongTensor(8, 16).random_(1, 31)
