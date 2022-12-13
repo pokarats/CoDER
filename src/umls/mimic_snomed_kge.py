@@ -183,7 +183,7 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--which_pickle", action="store", type=str,
-        default="cuis_to_discard_snomednorel",
+        default="cuis_to_discard_snomedke",
         help="filename keyword for saving new <version>_<which_pickle>.pickle file; obj to pickle is a set"
     )
     parser.add_argument(
