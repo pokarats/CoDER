@@ -71,6 +71,40 @@ class ProcessedIter(BaseIter):
                     yield row
 
 
+class ProcessedIterExtended(BaseIter):
+    """
+    Sentence iterator class for processing .csv file; this is the version from Multi-Res CNN
+    """
+
+    def __init__(self, filename, header=False, delimiter=",", slice_pos=None):
+        """
+
+        :param filename: path to corpus file
+        :type filename: str or Path
+        :param header: whether or not file contains a header row, if True skip this header row
+        :type header: bool
+        :param delimiter: char that each row is delimited by, e.g. default is ",", use "\t" for a .tsv file
+        :type delimiter: str
+        :param slice_pos: column position of the data to read e.g. for MIMIC-III texts are in 2
+        :type slice_pos: int
+        """
+        self.filename = filename
+        self.header = header
+        self.delimiter = delimiter
+        self.slice_pos = slice_pos
+
+    def __iter__(self):
+        with open(self.filename) as f:
+            r = csv.reader(f, delimiter=self.delimiter)
+            if self.header:
+                next(r)
+            for row in r:
+                if self.slice_pos:
+                    yield row[self.slice_pos]
+                else:
+                    yield row
+
+
 class MimicIter(ProcessedIter):
     """
     .csv file sentence iterator class; use this for MIMIC-III dataset to remove sep and cls tokens
