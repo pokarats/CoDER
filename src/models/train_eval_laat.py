@@ -85,7 +85,7 @@ def train(
                 tr_loss += labels_loss.item()
 
                 loss.backward()
-                nb_tr_examples += inputs.size(0)
+                nb_tr_examples += inputs[0].size(0)  # iputs is of list of 1 or 2 inputs
                 nb_tr_steps += 1
 
                 if grad_clip:
