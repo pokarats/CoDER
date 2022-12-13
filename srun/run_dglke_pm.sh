@@ -6,15 +6,15 @@ export CUDA_VISIBLE_DEVICES=0
 MYDATA=/netscratch/pokarats/ds
 IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.03-py3_dglkgesource.sqsh
 NUM_CPUS=8
-MEM=32GB
+MEM="$2"GB
 
 # variables for srun and python
-for neg in 512
+for neg in 64
 do
-  vers="transel2_base_$neg"
+  vers="transel2_case4_$neg"
   mkdir -p scratch/"$vers"
   echo "dir made at $vers"
-  for neval in 35000 30000 25000 20000
+  for neval in 40000 50000 60000 70000 80000 90000 100000
   do
     echo "Submitting version: $vers"
     echo "neg eval: $neval"
@@ -32,10 +32,10 @@ do
       --output=scratch/"$vers"/"$vers"_"$neval".out \
     dglke_train --model_name TransE_l2 --batch_size 1024 --log_interval 1000 --neg_sample_size $neg \
             --regularization_coef 1e-07 --hidden_dim 100 --gamma 10 --lr 0.1 --batch_size_eval 1000 \
-            --test -adv --valid --gpu $CUDA_VISIBLE_DEVICES --mix_cpu_gpu --max_step 100000 \
+            --test -adv --valid --gpu $CUDA_VISIBLE_DEVICES --mix_cpu_gpu --max_step 60000 \
 	    --neg_sample_size_eval $neval \
-            --dataset umls_"$neval" --format raw_udd_hrt --data_path "$MYDATA"/umls --save_path scratch/$vers \
-            --data_files train.tsv dev.tsv test.tsv
+            --dataset case4_"$neval" --format raw_udd_hrt --data_path "$MYDATA"/case4 --save_path scratch/$vers \
+            --data_files train.txt valid.txt valid.txt
     sleep 2
   done
 done

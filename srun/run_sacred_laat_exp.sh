@@ -11,7 +11,7 @@ MEM=64GB
 vers="top50 text"
 echo "Submitting version: $vers input_type"
 
-srun -K -p RTXA6000-MLT \
+srun -K -p $1 \
   --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
   --container-workdir="$(pwd)" \
   --container-image=$IMAGE \
