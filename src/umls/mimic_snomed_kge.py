@@ -69,7 +69,7 @@ def check_overlap(snomed_ent_file, mimic_w2v_json):
 
 def update_embeddings(src_embeddings_fpath, tgt_embeddings_fpath, mapping, save_fname=None):
     """
-    
+
     :param src_embeddings_fpath:
     :type src_embeddings_fpath:
     :param tgt_embeddings_fpath:
