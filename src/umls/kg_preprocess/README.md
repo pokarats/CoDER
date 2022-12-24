@@ -16,12 +16,12 @@ We store these files in `data/umls`
 
 Steps:
 
-1. run `./src/umls/scripts/preprocess_umls.sh`
+1. run `./src/umls/kg_preprocess/preprocess_umls.sh`
    1. this generates the following files in `data/umls`:
       - `snomed_active_concepts.txt`
       - `snomed_active_relations.txt`
       - `snomed_semantic_types.txt`
-2. run `./src/umls/scripts/kg_transductive.sh`
+2. run `./src/umls/kg_preprocess/kg_transductive.sh`
    1. this generates the necessary train/dev/test files for training KGE based on SNOMED_CT Knowldge Base
    2. All generated data files are in `data/umls`
 
