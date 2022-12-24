@@ -16,7 +16,7 @@ import numpy as np
 from collections import defaultdict
 
 
-snomed_dir = 'data/umls'
+snomed_dir = 'data/umls_noex'
 data_dir = snomed_dir
 
 #  see src/umls/README.md for how to obtain/generate these data files
@@ -61,6 +61,9 @@ exclude_types = ['Manufactured Object', 'Geographic Area', 'Professional or Occu
                  'Cell Component', 'Carbohydrate Sequence', 'Food', 'Group', 'Physical Object', 'Entity', 'Animal',
                  'Organism', 'Genetic Function', 'Family Group', 'Occupation or Discipline', 'Bacterium', 'Plant',
                  'Health Care Related Organization']
+
+# comment out line 66 below if excluding the types in line 52
+exclude_types = []
 
 # these are semantic groups present in mimic dataset
 include_groups = ['CHEM', 'DISO', 'ANAT', 'PROC', 'DEVI', 'PHYS', 'ACTI', 'PHEN', 'CONC', 'LIVB']
@@ -303,6 +306,18 @@ exclude_relations = [
     "inherent_location_of", "has_inherent_location", "has_process_output", 
     "process_output_of", "has_precondition", "precondition_of", 
     "definitional_manifestation_of", "has_definitional_manifestation", 
+    "has_technique", "technique_of"
+]
+
+# replacing exclusion list in line 300
+relatedness_relations = [
+    "same_as", "possibly_equivalent_to"
+]
+
+# replacing exclusion list in line 302
+exclude_relations = [
+    "mth_plain_text_form_of", "mth_has_xml_form", "mth_has_plain_text_form",
+    "mth_xml_form_of", "replaced_by", "replaces", "uses_energy", "energy_used_by",
     "has_technique", "technique_of"
 ]
 
