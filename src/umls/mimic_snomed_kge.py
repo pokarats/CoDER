@@ -161,12 +161,12 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--cui2idx_path", action="store", type=str, default="/Users/noonscape/Documents/msc_thesis/projects/CoDER/data/linked_data/model/mimic_snomed_cuiidx_base.json",
-        help="Path to mapping json file cuis in mimic3 dataset to dglkge idx."
+        help="Path to write/save mapping json file cuis in mimic3 dataset to dglkge idx."
     )
     parser.add_argument(
         "--idx2idx_path", action="store", type=str,
         default="/Users/noonscape/Documents/msc_thesis/projects/CoDER/data/linked_data/model/mimic_snomed_idxidx_base.json",
-        help="Path to mapping json file for mimic3 idx to dglkge idx in entity.tsv file."
+        help="Path to write/save mapping json file for mimic3 idx to dglkge idx in entity.tsv file."
     )
     parser.add_argument(
         "--mimic3_dir", action="store", type=str,
