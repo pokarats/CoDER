@@ -40,9 +40,9 @@ SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}/{Path(__file
 
 # Step 1: Initialize Neptune and create new Neptune run
 neptune_run = neptune.init(
-    project="pokarats/LAAT",
+    project="GraphStructuresMimicMLC/MimicICD9",
     api_token=DEV_API_KEY,
-    tags=f"slurm top50 text"
+    tags=f"snomed ct"
 )
 
 # Step 2: Add NeptuneObserver() to your sacred experiment's observers
