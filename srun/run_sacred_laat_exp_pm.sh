@@ -7,15 +7,14 @@ NUM_CPUS=16
 MEM="$2"GB
 
 # variables for srun and python
-for ver in 50 full
+for ver in full 50
 do
   for embedding in snomedbase snomednoex snomedcase4
   do
     desc="$ver cui $embedding"
     echo "Submitting: $desc experiment"
-    if [[ $ver == "full" ]]; then
-      # only install this for python version older than 3.8
-      echo "$ver version u and da is 512"
+    if [ $ver == 50 ]; then
+      echo "$ver version u and da is default 256"
       srun -K -p $1 \
         --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
         --container-workdir="$(pwd)" \
@@ -29,10 +28,9 @@ do
         --mail-user=noon.pokaratsiri@dfki.de \
       srun/install_pretask.sh python src/laat_exp.py with data_dir="$MYDATA" input_type=umls version="$ver" \
       embedding_type="$embedding" dr_params.prune_cui=True \
-      dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle \
-      laat_params.u=512 laat_params.da=512
+      dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle      
     else
-      echo "$ver no need to change u and da from default 256"
+      echo "$ver needs to be 512"
       srun -K -p $1 \
         --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
         --container-workdir="$(pwd)" \
@@ -46,7 +44,7 @@ do
         --mail-user=noon.pokaratsiri@dfki.de \
       srun/install_pretask.sh python src/laat_exp.py with data_dir="$MYDATA" input_type=umls version="$ver" \
       embedding_type="$embedding" dr_params.prune_cui=True \
-      dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle
+      dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle laat_params.u=512 laat_params.da=512
     fi
     sleep 3
   done
