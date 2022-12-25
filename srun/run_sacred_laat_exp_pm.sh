@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # SLURM environment arguments
 MYDATA=/netscratch/pokarats/ds
