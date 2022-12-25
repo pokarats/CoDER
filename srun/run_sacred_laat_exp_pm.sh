@@ -13,7 +13,7 @@ do
   do
     desc="$ver cui $embedding"
     echo "Submitting: $desc experiment"
-    if [[ $ver == 50 ]]; then
+    if [[ "$ver" == "50" ]]; then
       echo "$ver version u and da is default 256"
       srun -K -p $1 \
         --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
@@ -30,7 +30,7 @@ do
       embedding_type=umls dr_params.prune_cui=True \
       dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle
     else
-      echo "$ver needs to be 512"
+      echo "$ver version u and da need to be 512"
       srun -K -p $1 \
         --container-mounts=/netscratch/pokarats:/netscratch/pokarats,/ds:/ds:ro,"$(pwd)":"$(pwd)" \
         --container-workdir="$(pwd)" \
