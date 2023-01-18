@@ -134,8 +134,6 @@ class DataReader:
 
         # get labels from all partitions and fit MultiLabelBinarizer
         if 'MimicCuiSelectedTextIter' in str(self.doc_iterator):
-            print(type(self.doc_iterator), isinstance(self.doc_iterator, MimicCuiSelectedTextIter))
-            print(self.doc_iterator)
             all_labels_iter = itertools.chain(MimicDocIter(self.train_file, slice_pos=3),
                                               MimicDocIter(self.dev_file, slice_pos=3),
                                               MimicDocIter(self.test_file, slice_pos=3))
