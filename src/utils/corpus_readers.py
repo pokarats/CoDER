@@ -264,6 +264,12 @@ class MimicCuiDocIter(MimicCuiIter):
         # attributes to facilitate generator, not meant to be accessible
         self.store_sent_cui_span = store_sent_cui_span
 
+    def __str__(self):
+        return f"MimicCuiDocIter(filename={self.filename}, " \
+               f"threshold={self.confidence_threshold}, " \
+               f"pruned={self.pruned}, " \
+               f"store_sent_cui_span={self.store_sent_cui_span})"
+
     def __iter__(self):
         with open(self.filename) as rf:
             doc_ids = deque()
@@ -349,8 +355,12 @@ class MimicCuiSelectedTextIter(BaseIter):
                  cls='[CLS]',
                  threshold=0.7,
                  store_sent_cui_span=True):
-        self.txt_iter = MimicDocWholeSentIter(txt_filename, slice_pos, sep, cls)
+        self.slice_pos = slice_pos
+        self.txt_iter = MimicDocWholeSentIter(txt_filename, None, sep, cls)
         self.cui_doc_iter = MimicCuiDocIter(cui_filename, threshold, pruned, discard_cuis_file, store_sent_cui_span)
+
+    def __str__(self):
+        return "MimicCuiSelectedTextIter"
 
     def __iter__(self):
         for (text_data), (cui_data) in zip(self.txt_iter, self.cui_doc_iter):
@@ -366,24 +376,45 @@ class MimicCuiSelectedTextIter(BaseIter):
                 selected_doc_len += len(text_sent)
                 if text_sent:
                     selected_doc_sents.append(text_sent)
-            yield doc_id, selected_doc_sents, doc_labels, selected_doc_len
+
+            if self.slice_pos is None:
+                yield doc_id, selected_doc_sents, doc_labels, selected_doc_len
+            else:
+                # slice_pos specified, return just that column
+                if self.slice_pos == 0 or self.slice_pos == 1:
+                    yield doc_id
+                elif self.slice_pos == 2:
+                    yield selected_doc_sents
+                elif self.slice_pos == 3:
+                    yield doc_labels
+                elif self.slice_pos == 4:
+                    yield selected_doc_len
+                else:
+                    raise IndexError(f"MIMIC-III *.csv only has 5 columns; double check your file!")
 
 
 if __name__ == '__main__':
     cui_doc_iter = MimicCuiDocIter("../../data/linked_data/50/dev_50_umls.txt")
     mimic_doc_iter = MimicDocIter("../../data/mimic3/50/dev_50.csv")
+    mimic_doc_sent_iter = MimicDocWholeSentIter("../../data/mimic3/50/dev_50.csv")
+    mimic_selected_txt_iter = MimicCuiSelectedTextIter("../../data/linked_data/50/dev_50_umls.txt",
+                                                       "../../data/mimic3/50/dev_50.csv",
+                                                       True,
+                                                       "../../data/linked_data/50/50_cuis_to_discard_snomedcase4.pickle")
 
     dev_set_cui_docs = list(cui_doc_iter)
     dev_set_docs = list(mimic_doc_iter)
+    dev_sent_docs = list(mimic_selected_txt_iter)
     print(f"num cui docs: {len(dev_set_cui_docs)}")
     print(f"num csv docs: {len(dev_set_docs)}")
+    print(f"num csv docs: {len(dev_sent_docs)}")
 
-    cui_id, cui_sents, cui_len = dev_set_cui_docs[-1]
-    print(f"cui last doc id: {cui_id}"
+    cui_id, cui_sents, cui_len = dev_set_cui_docs[0]
+    print(f"cui last doc id: {cui_id}\n"
           f"cui last docs: {cui_sents}\n"
           f"cui las doc len: {cui_len}\n")
 
-    dev_id, sents, labels, dev_len = dev_set_docs[-1]
-    print(f"dev last doc id: {dev_id}"
+    dev_id, sents, labels, dev_len = dev_sent_docs[0]
+    print(f"dev last doc id: {dev_id}\n"
           f"dev last docs: {sents}\n"
           f"dev las doc len: {dev_len}\n")
