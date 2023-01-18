@@ -119,7 +119,6 @@ def text_cfg():
     input_type = "text"
     embedding_type = "umls"
     mimic_dir = Path(data_dir) / "mimic3" / f"{version}"
-    doc_iterator = None
     cui_embedding_path = None
 
     if input_type == "text":
@@ -156,8 +155,6 @@ def text_cfg():
                        trainable=False)  # word embedding weights static
 
     # DataReader class params, first arg is batch_size
-    if doc_iterator is not None:
-        doc_iterator = MimicCuiSelectedTextIter
     dr_params = dict(data_dir=f"{Path(data_dir) / 'mimic3'}",
                      version=version,
                      input_type=input_type,
@@ -165,7 +162,7 @@ def text_cfg():
                      cui_prune_file=None,
                      vocab_fn=f"processed_full_{input_type}_pruned.json",
                      max_seq_length=4000,
-                     doc_iterator=doc_iterator,
+                     doc_iterator=None,
                      umls_iterator=None)
 
 
