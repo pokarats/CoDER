@@ -142,8 +142,8 @@ the largest difference between the text and CUI models.
 
 We experimented with Knowledge Graph Embeddings (KGE) on the existing baseline LAAT model for the CUI input type. Our
 goal is to investigate if KGE pre-training and its relational information improve ICD-9 classification using CUIs
-as input in comparison to the baseline W2V embedding. This aims to answer one of our research questions: whether graph/
-hierachical/relational information in the embedding (e.g. KGE) space is beneficial to this task.
+as input in comparison to the baseline W2V embedding. This aims to answer one of our research questions: **whether
+hierachical or relational information in the embedding (e.g. KGE) space is beneficial to this task.**
 
 Another extension is to investigate graph structure in the encoder part of the pipeline. We experimented with using a
 GNN model instead of the LSTM-based encoder in the LAAT baseline model.
@@ -154,17 +154,19 @@ For results of the experiments in this section, please see [Extension Results](/
 
 We follow [Benchmark and Best Practices for Biomedical Knowledge Graph Embeddings](https://aclanthology.org/2020.bionlp-1.18)
 and trained KGE from the [UMLS SNOMED-CT Knowledge Base](https://www.nlm.nih.gov/research/umls/index.html) to represent
-CUIs in the MIMIC dataset. Training is done using [DGL-KE Library](https://doi.org/10.1145/3397271.3401172).
+CUIs in the MIMIC dataset. Training is done using [DGL-KE Library](https://github.com/awslabs/dgl-ke).
 
 We experimented with 2 pre-training approaches:
 
-- case4 embeddings from the data released by [Benchmark and Best Practices for Biomedical Knowledge Graph Embeddings](https://aclanthology.org/2020.bionlp-1.18)
+- case4 embeddings from the data released by [Benchmark and Best Practices for Biomedical Knowledge Graph Embeddings](https://github.com/dchang56/snomed_kge)
 - base embeddings from our own installation of the [UMLS SNOMED-CT Knowledge Base](https://www.nlm.nih.gov/research/umls/index.html)
 
 Preliminary results show that case4 KGE achieve higher P,R, and F1 scores than base embeddings, using the baseline
 LAAT encoder for classification. Since not all CUIs in the MIMIC dataset have relations in the KGE pre-training,
 we had to prune out CUIs without relations. It seems that case4 KGE represent **~50%** and base KGE only **35%** of the 
-CUIS in the MIMIC dataset. This reduced representation correlates with the lower performance by the base KGE.
+CUIS in the MIMIC dataset. This reduced representation correlates with the lower performance by the base KGE. It is
+surprising, however, that with only 50% of CUIs present, the model can still achieve higher evaluation metrics than
+using the baseline W2V embeddings for the CUI input type.
 
 ### Combined Text and CUI Input Model
 
@@ -181,6 +183,11 @@ encoder model.
 
 To verify this, we experimented with a GNN-based encoder model with pre-trained KGE.
 
+#### GCN
+
+Following the works in [Learning EHR Graphical Structures with Graph Convolutional Transformer](https://ojs.aaai.org/index.php/AAAI/article/view/5400)
+and [LiGCN](https://aclanthology.org/2022.dlg4nlp-1.7), we set up the task of ICD-9 code/mult-label classification
+as a graph classification problem using GCN and a classification layer.
 
 ## TODO's + Notes
 
