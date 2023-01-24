@@ -1,3 +1,6 @@
+"""
+Adapted from examples from https://docs.dgl.ai/en/rying_test/guide/minibatch.html#guide-minibatch
+"""
 import torch
 import torch.nn as nn
 import dgl

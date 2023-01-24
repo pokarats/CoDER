@@ -1,3 +1,7 @@
+"""
+GNN training adapted from link_prediction on GraphSAGE example in
+https://github.com/dmlc/dgl/blob/master/examples/pytorch/graphsage/link_pred.py
+"""
 import torch
 import torch.nn as nn
 from torch import optim
