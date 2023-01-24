@@ -31,14 +31,17 @@ from src.utils.corpus_readers import MimicDocIter
 logger = logging.getLogger(__name__)
 
 
-def write_to_json(data, path):
+def write_to_json(data, path, indent=4):
     """
+
     :param data: [{id:"doc id", "labels_id": ["label1", "label2"]}, {...}]
     :param path:
+    :param indent: json.dump indent param value
+    :type indent: int
     :return: None
     """
     with open(path, mode="w", encoding="utf-8") as out_file:
-        json.dump(data, out_file, indent=4, ensure_ascii=False)
+        json.dump(data, out_file, indent=indent, ensure_ascii=False)
     logger.info(f"Object saved at: {path}")
 
 

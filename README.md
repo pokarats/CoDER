@@ -12,7 +12,7 @@ problem.
 
 - python>=3.7
 - pickle5==0.0.12 (not required if python >= 3.8)
-- torch==1.11.0
+- torch==1.12.0
 - scikit-learn==0.24.0
 - numpy==1.22.2
 - scipy==1.6.3
@@ -27,6 +27,8 @@ problem.
 - sacred==0.8.2
 - neptune-client==0.16.8
 - neptune-sacred==0.10.0
+- dgl>=0.5.0,<=0.9.1
+- dglke
 
 Run `pip install -r requirements.txt` to install the required libraries
 
@@ -133,9 +135,59 @@ their publication.
 
 
 ## Proposed Extensions
+
+From the baseline results, the CUI input models are within a few percentage points in precision score (both the top-50
+and full versions). The F1 scores are also within 10-15 percentage points of the text-input models. Recall scores show
+the largest difference between the text and CUI models.
+
+We experimented with Knowledge Graph Embeddings (KGE) on the existing baseline LAAT model for the CUI input type. Our
+goal is to investigate if KGE pre-training and its relational information improve ICD-9 classification using CUIs
+as input in comparison to the baseline W2V embedding. This aims to answer one of our research questions: **whether
+hierachical or relational information in the embedding (e.g. KGE) space is beneficial to this task.**
+
+Another extension is to investigate graph structure in the encoder part of the pipeline. We experimented with using a
+GNN model instead of the LSTM-based encoder in the LAAT baseline model.
+
+For results of the experiments in this section, please see [Extension Results](/res/README.md#extension-results)
+
 ### KGE
+
+We follow [Benchmark and Best Practices for Biomedical Knowledge Graph Embeddings](https://aclanthology.org/2020.bionlp-1.18)
+and trained KGE from the [UMLS SNOMED-CT Knowledge Base](https://www.nlm.nih.gov/research/umls/index.html) to represent
+CUIs in the MIMIC dataset. Training is done using [DGL-KE Library](https://github.com/awslabs/dgl-ke).
+
+We experimented with 2 pre-training approaches:
+
+- case4 embeddings from the data released by [Benchmark and Best Practices for Biomedical Knowledge Graph Embeddings](https://github.com/dchang56/snomed_kge)
+- base embeddings from our own installation of the [UMLS SNOMED-CT Knowledge Base](https://www.nlm.nih.gov/research/umls/index.html)
+
+Preliminary results show that case4 KGE achieve higher P,R, and F1 scores than base embeddings, using the baseline
+LAAT encoder for classification. Since not all CUIs in the MIMIC dataset have relations in the KGE pre-training,
+we had to prune out CUIs without relations. It seems that case4 KGE represent **~50%** and base KGE only **35%** of the 
+CUIS in the MIMIC dataset. This reduced representation correlates with the lower performance by the base KGE. It is
+surprising, however, that with only 50% of CUIs present, the model can still achieve higher evaluation metrics than
+using the baseline W2V embeddings for the CUI input type.
+
+### Combined Text and CUI Input Model
+
+We also experimented with training the baseline LAAT model with both types of input: text and CUI. We used W2V embeddings
+for the text input type and the case4 KGE for the CUI input type. The idea is to investigate if adding hierachical or 
+relational information in the KGE-represented CUIs to the text-input data improves model's performance.
+
 ### GNN
-### Extension Results
+
+From the results of the Combined and KGE models, the text-input LAAT model shows the highest P, R, and F1 scores.
+We hypothesized that the LSTM-based encoder in the baseline LAAT model favors sequential embeddings and input type.
+As a result, any gain in hierachical or relational information from KGE pretraining would have been negated by the
+encoder model. 
+
+To verify this, we experimented with a GNN-based encoder model with pre-trained KGE.
+
+#### GCN
+
+Following the works in [Learning EHR Graphical Structures with Graph Convolutional Transformer](https://ojs.aaai.org/index.php/AAAI/article/view/5400)
+and [LiGCN](https://aclanthology.org/2022.dlg4nlp-1.7), we set up the task of ICD-9 code/mult-label classification
+as a graph classification problem using GCN and a classification layer.
 
 ## TODO's + Notes
 

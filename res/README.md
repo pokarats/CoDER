@@ -89,11 +89,48 @@ Our implementation reproduced the results for the **Top-50** and **Full** versio
 type as reported in [Vu et al. (2020)](https://arxiv.org/abs/2007.06351). We report the results from using **UMLS CUIs** 
 as input tokens below.
 
-| Model      | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
-|------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
-| Text Top50 |   75.60   |   66.95   |   66.55    |   71.01    |    92.79    |    94.6     | 67.28 |
-| CUI Top50  |   68.75   |   47.38   |   50.55    |   56.10    |    86.16    |    89.26    | 57.50 |
-| Text Full  |   65.70   |   50.64   |    9.87    |   57.20    |    89.84    |    98.56    | 80.91 |
-| CUI Full   |   64.93   |   36.59   |    6.25    |    46.8    |    84.38    |    97.74    | 73.90 |
+| Model      | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro)  | AUC (Macro) | AUC (Micro) |  P@5  |
+|------------|:---------:|:---------:|:----------:|:-----------:|:-----------:|:-----------:|:-----:|
+| Text Top50 |   75.60   |   66.95   |   66.55    |  **71.01**  |    92.79    |    94.6     | 67.28 |
+| CUI Top50  |   68.75   |   47.38   |   50.55    |    56.10    |    86.16    |    89.26    | 57.50 |
+| Text Full  |   65.70   |   50.64   |    9.87    |  **57.20**  |    89.84    |    98.56    | 80.91 |
+| CUI Full   |   64.93   |   36.59   |    6.25    |    46.8     |    84.38    |    97.74    | 73.90 |
 
 (Results from 10/15/2022 run on [Git Commit@36dda76](https://github.com/pokarats/CoDER/commit/36dda76d28e2a9606688016a770d0bf1129104fe))
+
+
+## Extension Results
+
+### KGE
+
+All models reported here were with CUI input type. Baseline W2V were re-run with pruned CUIs for comparison; hence,
+the results are different from what was reported in the earlier section.
+
+| Model               | P (Micro)  | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|---------------------|:----------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Base Top50          | **69.71**  |   52.05   |   54.02    |   59.60    |    87.17    |    90.47    | 59.68 |
+| Case4 Top50         |   68.46    |   59.01   |   58.94    | **63.38**  |    88.22    |    91.13    | 60.69 |
+| W2V Top50           |   64.90    |   55.03   |   53.53    |   59.56    |    86.07    |    89.40    | 58.06 |
+| Base Full[^basef]   |   62.11    |   34.84   |    5.53    |   44.64    |    86.55    |    97.99    | 71.73 |
+| Case4 Full[^case4f] |   63.79    |   37.61   |    6.50    | **47.32**  |    85.60    |    97.89    | 73.51 |
+| W2V Full            | **65.78**  |   35.44   |    5.70    |   46.07    |    84.92    |    97.77    | 73.31 |
+
+(Results from 12/26/2022 run on [Git Commit@c658090](https://github.com/pokarats/CoDER/commit/c658090f63bd706a28319ef7eac15dfb81082c5e))
+
+[^basef]: With `u==256` and `da==256`.
+[^case4f]: With `u==256` and `da==256`.
+
+### Combined KGE + Text
+
+We experimented on with the case4 KGE as this is the best-performming KGE for the CUI input type.
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Case4 Top50 |   71.52   |   68.23   |   65.52    |   69.83    |    91.11    |    98.68    | 65.69 |
+| Case4 Full  |   63.13   |   50.10   |    6.25    |   55.87    |    84.38    |    97.74    | 78.76 |
+
+(Results from 12/26/2022 run on [Git Commit@c658090](https://github.com/pokarats/CoDER/commit/c658090f63bd706a28319ef7eac15dfb81082c5e))
+
+### GNN
+
+WIP
