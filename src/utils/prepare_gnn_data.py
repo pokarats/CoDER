@@ -2,6 +2,7 @@ import torch
 import dgl
 from dgl.data import DGLDataset
 from dgl.dataloading import GraphDataLoader
+from dgl.data.utils import save_graphs, save_info, load_graphs, load_info
 import os
 import itertools
 import numpy as np
@@ -124,20 +125,22 @@ class GNNDataset(DGLDataset):
                  dataset,
                  mlb,
                  name="train",
+                 emb_name="snomedcase4",
                  self_loop=True,
-                 raw_dir="../../data/umls",
+                 raw_dir="../../data",
+                 save_dir="../../data/gnn_data",  # save_path = os.path.join(save_dir, self.name)
                  force_reload=False,
                  verbose=False,
                  transform=None,
                  ):
 
         self._name = name  # MIMIC-III-CUI train/dev/test partition
-        self.ds_name = "MIMIC-III-CUI"
+        self.ds_name = "mimic3_cui"
+        self.emb_name = emb_name
 
         self.data = dataset  # DataReader.get_dataset('<split: train/dev/test>')
         # self.id2label = {k: v for k, v in enumerate(self.mlb.classes_)}
         self.mlb = mlb  # has already been fit with all label classes
-        # TODO figure out file paths for required data files e.g. sem type info, saved embeddings
 
         self.cui2tui = dict()  # mapping cui to tui from semantic_info.csv <--\t separated, col 2
         self.cui2sg = dict()  # mapping cui to semantic group from semantic_info.csv <-- \t separated col 4
@@ -147,7 +150,8 @@ class GNNDataset(DGLDataset):
         self.labels = []
 
         # label dict mapping idx to labels?
-        self.glabel_dict = {}  # TODO mapping mlb.classes_ idx to original labels and vice versa?
+        self.glabel_dict = {}  # mapping of mlb.classes_ idx to original labels, classes_ global across train/test/dev
+        self._partition_label_dict = {}  # mapping idx to actual label classe in this partition only
         self.nlabel_dict = {}
         self.elabel_dict = {}
         self.ndegree_dict = {}
@@ -158,7 +162,8 @@ class GNNDataset(DGLDataset):
         self.m = 0  # total edges number
 
         # global num of classes
-        self.gclasses = 0
+        self.gclasses = 0  # number of classes in the whole dataset
+        self.pclasses = 0  # number of classes in this partition
         self.nclasses = 0
         self.eclasses = 0
         self.dim_nfeats = 0
@@ -169,28 +174,77 @@ class GNNDataset(DGLDataset):
 
         super(GNNDataset, self).__init__(
             name=name,
-            hash_key=(name, self_loop),
+            hash_key=(name, emb_name, self_loop),
             raw_dir=raw_dir,
+            save_dir=save_dir,
             force_reload=force_reload,
             verbose=verbose,
             transform=transform,
         )
 
+    @property
+    def raw_path(self):
+        return os.path.join(self.raw_dir, "gnn_data")
+
+    def __len__(self):
+        """Return the number of graphs in the dataset."""
+        return len(self.graphs)
+
+    def __getitem__(self, index):
+        """Get the idx-th sample.
+                Parameters
+                ---------
+                idx : int
+                    The sample index.
+                Returns
+                -------
+                (:class:`dgl.Graph`, Tensor)
+                    The graph and its label.
+                """
+        if self._transform is None:
+            g = self.graphs[index]
+        else:
+            g = self._transform(self.graphs[index])
+        return g, self.labels[index]
+        # doc_id, input_ids, labels_bin = self.data[index]
+        # return input_ids, labels_bin
+
+    def _sem_file_path(self):
+        return os.path.join(
+            self.raw_dir,
+            "umls",
+            "semantic_info.csv"
+        )
+
+    def _emb_file_path(self):
+        return os.path.join(
+            self.raw_dir,
+            "linked_data",
+            "model",
+            f"processed_full_{self.emb_name}_pruned.npy"
+        )
+
     def process(self):
 
         # get semantic info for cui
-        sem_file = os.path.join(self.raw_dir, "semantic_info.csv")
+        sem_file = self._sem_file_path()
         sem_info_iter = ProcessedIterExtended(sem_file, header=True, delimiter="\t")
 
         # load saved embeddings, e.g. KGE .npy file
-        cui_ptr_embeddings = np.load("../../data/linked_data/model/processed_full_snomedcase4_pruned.npy")
+        cui_ptr_embeddings = np.load(self._emb_file_path())
 
+        if self.verbose:
+            print(f"Reading sem type and group info from {sem_file}...")
         for row in sem_info_iter:
             cui = row[1]
             tui = row[2]
             sg = row[4]
             self.cui2tui[cui] = tui
             self.cui2sg[cui] = sg
+
+        # convert dataset.mlb.classes_ to self.glabel_dict mapping idx to actual label classes
+        # dataset.mlb.classes_ is an ndarray mapping idx to actual label classes
+        self.glabel_dict = {int(label_index[0]): v for label_index, v in np.ndenumerate(self.mlb.classes_)}
 
         # create graph for each doc in cui doc iter
         for graph_i in range(self.N):
@@ -199,8 +253,12 @@ class GNNDataset(DGLDataset):
             doc_data = self.data[graph_i]
             doc_id, input_ids, input_tokens, glabel, n_nodes = doc_data
 
+            # convert ndarray to Tensor first and append to list
+            # avoid converting list of ndarrays to Tensor later, cat along dim=0 instead when batching
             self.labels.append(torch.Tensor(glabel))
-            self.glabel_dict[graph_i] = glabel
+            for each_label in self.mlb.inverse_transform(glabel)[0]:
+                if each_label not in self._partition_label_dict:
+                    self._partition_label_dict[each_label] = len(self._partition_label_dict)
 
             # create dgl graph for each doc
             g = dgl.graph(([], []))
@@ -230,6 +288,17 @@ class GNNDataset(DGLDataset):
                 embd_row_idx = input_ids[node_j]
                 nattrs.append(cui_ptr_embeddings[embd_row_idx])
 
+                # relabel nodes if it has labels
+                # if it doesn't have node labels, then every node's label is its cui semantic group
+                # relabel to indexed 0 to number of semantic group in the dataset - 1
+                # this is optional and TODO: this to be refactored as well
+                node_cui = input_tokens[node_j]
+                node_sg = self.cui2sg[node_cui]
+                if node_sg not in self.nlabel_dict:
+                    mapped = len(self.nlabel_dict)
+                    self.nlabel_dict[node_sg] = mapped
+                nlabels.append(self.nlabel_dict[node_sg])
+
             # store node embeddings to the whole graph as torch tensor
             if nattrs != []:
                 nattrs = np.stack(nattrs)  # dim[0] == number of nodes/graph, dim[1] embedding dimension e.g. 100
@@ -251,15 +320,16 @@ class GNNDataset(DGLDataset):
             self.graphs.append(g)
 
         # concat labels Tensors in self.labels to be of shape num doc * num label classes
-        # from list of torch.Tensors, dtype float32
-        self.labels = torch.cat(self.labels, dim=0)
+        # from list of torch.Tensors, dtype float32 --> this step should be done per batch at collate_fn
+        # self.labels = torch.cat(self.labels, dim=0)
         # if no attr
         if not self.nattrs_flag:
             if self.verbose:
                 print("there are no node features in this dataset!")
                 # after load, get the #classes and #dim
 
-        self.gclasses = len(self.mlb.classes_)  # len(self.glabel_dict) when implemented
+        self.gclasses = len(self.glabel_dict)
+        self.pclasses = len(self._partition_label_dict)
         self.nclasses = len(self.nlabel_dict)
         self.eclasses = len(self.elabel_dict)
         self.dim_nfeats = len(self.graphs[0].ndata["attr"][1])
@@ -269,6 +339,7 @@ class GNNDataset(DGLDataset):
                   f"-------- Data Statistics -------- \n"
                   f"#Graphs: {self.N}\n"
                   f"#Graph Classes: {self.gclasses}\n"
+                  f"#Partition Label Classes: {self.pclasses}\n"
                   f"#Nodes: {self.n}\n"
                   f"#Node Classes: {self.nclasses}\n"
                   f"#Node Features Dim: {self.dim_nfeats}"
@@ -281,47 +352,100 @@ class GNNDataset(DGLDataset):
             # cc = networkx.connected_components(g)
             #
 
-    def __len__(self):
-        """Return the number of graphs in the dataset."""
-        return len(self.graphs)
+    def save(self):
+        graph_path = os.path.join(
+            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.bin"
+        )
 
-    def __getitem__(self, index):
-        """Get the idx-th sample.
-                Parameters
-                ---------
-                idx : int
-                    The sample index.
-                Returns
-                -------
-                (:class:`dgl.Graph`, Tensor)
-                    The graph and its label.
-                """
-        if self._transform is None:
-            g = self.graphs[index]
+        info_path = os.path.join(
+            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.pkl"
+        )
+        label_dict = {"labels": self.labels}
+        info_dict = {
+            "N": self.N,
+            "n": self.n,
+            "m": self.m,
+            "self_loop": self.self_loop,
+            "gclasses": self.gclasses,
+            "pclasses": self.pclasses,
+            "nclasses": self.nclasses,
+            "eclasses": self.eclasses,
+            "dim_nfeats": self.dim_nfeats,
+            "glabel_dict": self.glabel_dict,
+            "plabel_dict": self._partition_label_dict,
+            "nlabel_dict": self.nlabel_dict,
+            "elabel_dict": self.elabel_dict,
+            "ndegree_dict": self.ndegree_dict,
+        }
+        save_graphs(str(graph_path), self.graphs, label_dict)
+        save_info(str(info_path), info_dict)
+
+    def load(self):
+        graph_path = os.path.join(
+            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.bin"
+        )
+        info_path = os.path.join(
+            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.pkl"
+        )
+        graphs, label_dict = load_graphs(str(graph_path))
+        info_dict = load_info(str(info_path))
+
+        self.graphs = graphs
+        self.labels = label_dict["labels"]
+
+        self.N = info_dict["N"]
+        self.n = info_dict["n"]
+        self.m = info_dict["m"]
+        self.self_loop = info_dict["self_loop"]
+        self.gclasses = info_dict["gclasses"]
+        self.pclasses = info_dict["pclasses"]
+        self.nclasses = info_dict["nclasses"]
+        self.eclasses = info_dict["eclasses"]
+        self.dim_nfeats = info_dict["dim_nfeats"]
+        self.glabel_dict = info_dict["glabel_dict"]
+        self._partition_label_dict = info_dict["plabel_dict"]
+        self.nlabel_dict = info_dict["nlabel_dict"]
+        self.elabel_dict = info_dict["elabel_dict"]
+        self.ndegree_dict = info_dict["ndegree_dict"]
+
+    def has_cache(self):
+        graph_path = os.path.join(
+            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.bin"
+        )
+        info_path = os.path.join(
+            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.pkl"
+        )
+        if os.path.exists(graph_path) and os.path.exists(info_path):
+            return True
         else:
-            g = self._transform(self.graphs[index])
-        return g, self.labels[index]
-        # doc_id, input_ids, labels_bin = self.data[index]
-        # return input_ids, labels_bin
+            return False
+
+    @property
+    def num_classes(self):
+        return self.gclasses
 
     @staticmethod
     def collate_gnn(samples):
         # The input `samples` is a list of pairs
         #  (graph, label).
-        graphs, labels = map(list, zip(*samples))
+        graphs, labels = list(zip(*samples))
         batched_graph = dgl.batch(graphs)
-        return batched_graph, labels
+
+        # concat labels Tensors in self.labels to be of shape num doc * num label classes
+        # from list of torch.Tensors, dtype float32 --> this step should be done per batch at collate_fn
+        batched_labels = torch.cat(labels, dim=0)
+
+        return batched_graph, batched_labels
 
 
 def get_dataloader(dataset, batch_size, shuffle, collate_fn=GNNDataset.collate_gnn, num_workers=8):
     data_loader = GraphDataLoader(
         dataset=dataset,
+        collate_fn=collate_fn,
         batch_size=batch_size,
         shuffle=shuffle,
-        pin_memory=True,
-        num_workers=num_workers,
-        collate_fn=collate_fn,
-        drop_last=False
+        drop_last=False,
+        num_workers=num_workers
     )
     return data_loader
 
@@ -336,6 +460,7 @@ def get_data(batch_size=8, dataset_class=GNNDataset, collate_fn=GNNDataset.colla
 
 if __name__ == '__main__':
     check_gnn_data_reader = False
+    check_gnn_dataset = True
     if check_gnn_data_reader:
         data_reader = GNNDataReader(data_dir="../../data/mimic3",
                                     version="full",
@@ -347,6 +472,22 @@ if __name__ == '__main__':
         print(f"id: {d_id}, x: {x}\n, {x_token}, y: {y}, doc_size: {doc_size}")
         train_stats = data_reader.get_dataset_stats("train")
 
-    sem_info_iter = ProcessedIterExtended("../../data/umls/semantic_info.csv", header=True, delimiter="\t")
-    sem_info = list(sem_info_iter)
-    print(sem_info[0])
+    if check_gnn_dataset:
+        data_reader = GNNDataReader(data_dir="../../data/mimic3",
+                                    version="full",
+                                    input_type="umls",
+                                    prune_cui=True,
+                                    cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",
+                                    vocab_fn="processed_full_umls_pruned.json")
+        gnn_dataset = GNNDataset(dataset=data_reader.get_dataset("train"),
+                                 mlb=data_reader.mlb,
+                                 name="train",
+                                 verbose=True)
+        g_sample, label_sample = gnn_dataset[0]
+        print(g_sample)
+        print(label_sample)
+
+
+    # sem_info_iter = ProcessedIterExtended("../../data/umls/semantic_info.csv", header=True, delimiter="\t")
+    # sem_info = list(sem_info_iter)
+    # print(sem_info[0])
