@@ -1,3 +1,4 @@
+import networkx
 import torch
 import dgl
 from dgl.data import DGLDataset
@@ -6,28 +7,11 @@ from dgl.data.utils import save_graphs, save_info, load_graphs, load_info
 import os
 import itertools
 import numpy as np
-from sklearn.preprocessing import MultiLabelBinarizer
 
-from src.utils.corpus_readers import MimicDocIter, MimicCuiDocIter, MimicCuiSelectedTextIter, ProcessedIterExtended
+from src.utils.corpus_readers import ProcessedIterExtended
 from src.utils.prepare_laat_data import DataReader
 
 os.environ['DGLBACKEND'] = 'pytorch'
-
-"""
-class DataReader:
-
-    def __init__(self,
-                 data_dir="../../data/mimic3",
-                 version="full",
-                 input_type="text",
-                 prune_cui=False,
-                 cui_prune_file=None,
-                 vocab_fn="processed_full_text_pruned.json",
-                 max_seq_length=4000,
-                 doc_iterator=None,
-                 umls_iterator=None,
-                 second_txt_vocab_fn=None):
-"""
 
 
 class GNNDataReader(DataReader):
@@ -126,10 +110,11 @@ class GNNDataset(DGLDataset):
                  mlb,
                  name="train",
                  emb_name="snomedcase4",
+                 mode="base",  # graph building mode, base vs <name_of_experiment>
                  self_loop=True,
                  raw_dir="../../data",
                  save_dir="../../data/gnn_data",  # save_path = os.path.join(save_dir, self.name)
-                 force_reload=False,
+                 force_reload=True,
                  verbose=False,
                  transform=None,
                  ):
@@ -137,6 +122,7 @@ class GNNDataset(DGLDataset):
         self._name = name  # MIMIC-III-CUI train/dev/test partition
         self.ds_name = "mimic3_cui"
         self.emb_name = emb_name
+        self.mode = mode
 
         self.data = dataset  # DataReader.get_dataset('<split: train/dev/test>')
         # self.id2label = {k: v for k, v in enumerate(self.mlb.classes_)}
@@ -155,16 +141,18 @@ class GNNDataset(DGLDataset):
         self.nlabel_dict = {}
         self.elabel_dict = {}
         self.ndegree_dict = {}
+        self.cc_dict = {}  # mapping graph idx to subgraphs
 
         # global num
         self.N = len(self.data)  # total graphs number
         self.n = 0  # total nodes number
         self.m = 0  # total edges number
+        self.cc = 0  # total number of subgraphs
 
         # global num of classes
         self.gclasses = 0  # number of classes in the whole dataset
         self.pclasses = 0  # number of classes in this partition
-        self.nclasses = 0
+        self.nclasses = 0  # number of node classes
         self.eclasses = 0
         self.dim_nfeats = 0
 
@@ -174,7 +162,7 @@ class GNNDataset(DGLDataset):
 
         super(GNNDataset, self).__init__(
             name=name,
-            hash_key=(name, emb_name, self_loop),
+            hash_key=(name, emb_name, mode, self_loop),
             raw_dir=raw_dir,
             save_dir=save_dir,
             force_reload=force_reload,
@@ -224,6 +212,35 @@ class GNNDataset(DGLDataset):
             f"processed_full_{self.emb_name}_pruned.npy"
         )
 
+    def _build_graph_edges(self, n_nodes, input_tokens):
+        if self.mode == "base":
+            # create dgl graph for each doc
+            g = dgl.graph(([], []))
+            g.add_nodes(n_nodes)
+            m_edges = 0
+
+            if self.self_loop:
+                # product includes self element
+                groupby_iterable = itertools.product(range(n_nodes), repeat=2)
+            else:
+                # permute doesn't include self element
+                groupby_iterable = itertools.permutations(range(n_nodes), r=2)
+            for src_dst_pair in groupby_iterable:
+                src_idx, dst_idx = src_dst_pair
+                src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
+                if self.cui2tui[src_cui] == self.cui2tui[dst_cui]:
+                    m_edges += 1
+                    g.add_edges(src_idx, dst_idx)
+            return g, m_edges
+        else:
+            raise NotImplementedError(f"{self.mode} method has not been implemented!!")
+
+    @staticmethod
+    def _get_subgraphs(g):
+        edge_list = list(zip(g.edges()[0].tolist(), g.edges()[1].tolist()))
+        nx_g = networkx.from_edgelist(edge_list)
+        return list(networkx.connected_components(nx_g))
+
     def process(self):
 
         # get semantic info for cui
@@ -236,9 +253,7 @@ class GNNDataset(DGLDataset):
         if self.verbose:
             print(f"Reading sem type and group info from {sem_file}...")
         for row in sem_info_iter:
-            cui = row[1]
-            tui = row[2]
-            sg = row[4]
+            cui, tui, sg = row[1], row[2], row[4]
             self.cui2tui[cui] = tui
             self.cui2sg[cui] = sg
 
@@ -260,30 +275,12 @@ class GNNDataset(DGLDataset):
                 if each_label not in self._partition_label_dict:
                     self._partition_label_dict[each_label] = len(self._partition_label_dict)
 
-            # create dgl graph for each doc
-            g = dgl.graph(([], []))
-            g.add_nodes(n_nodes)
-
-            nlabels = []  # node labels; none for now, can store sem types? sem group? whether cui in icd9 sem type?
-            nattrs = []  # node attributes if it has
-            m_edges = 0
-
-            # add edges
-            # TODO: refactor this to accomodate future improvements baseline vs different ways of connecting edges
-            if self.self_loop:
-                # product includes self element
-                groupby_iterable = itertools.product(range(n_nodes), repeat=2)
-            else:
-                # permute doesn't include self element
-                groupby_iterable = itertools.permutations(range(n_nodes), r=2)
-            for src_dst_pair in groupby_iterable:
-                src_idx, dst_idx = src_dst_pair
-                src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
-                if self.cui2tui[src_cui] == self.cui2tui[dst_cui]:
-                    m_edges += 1
-                    g.add_edges(src_idx, dst_idx)
+            # build dgl graph store num edges
+            g, m_edges = self._build_graph_edges(n_nodes, input_tokens)
 
             # store node features/embeddings if any
+            nlabels = []  # node labels; none for now, can store sem types? sem group? whether cui in icd9 sem type?
+            nattrs = []  # node attributes if it has
             for node_j in range(n_nodes):
                 embd_row_idx = input_ids[node_j]
                 nattrs.append(cui_ptr_embeddings[embd_row_idx])
@@ -319,9 +316,13 @@ class GNNDataset(DGLDataset):
 
             self.graphs.append(g)
 
+            # analyze for num. subgraphs in each document
+            self.cc_dict[graph_i] = self._get_subgraphs(g)
+            self.cc += len(self.cc_dict[graph_i])
+
         # concat labels Tensors in self.labels to be of shape num doc * num label classes
-        # from list of torch.Tensors, dtype float32 --> this step should be done per batch at collate_fn
-        # self.labels = torch.cat(self.labels, dim=0)
+        # from list of torch.Tensors, dtype float32
+        self.labels = torch.cat(self.labels, dim=0)
         # if no attr
         if not self.nattrs_flag:
             if self.verbose:
@@ -332,7 +333,7 @@ class GNNDataset(DGLDataset):
         self.pclasses = len(self._partition_label_dict)
         self.nclasses = len(self.nlabel_dict)
         self.eclasses = len(self.elabel_dict)
-        self.dim_nfeats = len(self.graphs[0].ndata["attr"][1])
+        self.dim_nfeats = self.graphs[0].ndata["attr"].shape[-1]  # torch.Size([1,100]) --> 100
 
         if self.verbose:
             print(f"Done."
@@ -342,15 +343,12 @@ class GNNDataset(DGLDataset):
                   f"#Partition Label Classes: {self.pclasses}\n"
                   f"#Nodes: {self.n}\n"
                   f"#Node Classes: {self.nclasses}\n"
-                  f"#Node Features Dim: {self.dim_nfeats}"
+                  f"#Node Features Dim: {self.dim_nfeats}\n"
                   f"#Edges: {self.m}\n"
                   f"#Edge Classes: {self.eclasses}\n"
                   f"Avg. of #Nodes: {self.n / self.N}\n"
-                  f"Avg. of #Edge: {self.m / self.N}\n")
-            # TODO: add avg #subgraphs (i.e. connected components logic) dgl <-->networkx
-            # g = networkx.from_edgelist(same_sem_types)
-            # cc = networkx.connected_components(g)
-            #
+                  f"Avg. of #Edge: {self.m / self.N}\n"
+                  f"Avg. of #Subgraphs: {self.cc / self.N}")
 
     def save(self):
         graph_path = os.path.join(
@@ -365,6 +363,7 @@ class GNNDataset(DGLDataset):
             "N": self.N,
             "n": self.n,
             "m": self.m,
+            "cc": self.cc,
             "self_loop": self.self_loop,
             "gclasses": self.gclasses,
             "pclasses": self.pclasses,
@@ -376,6 +375,7 @@ class GNNDataset(DGLDataset):
             "nlabel_dict": self.nlabel_dict,
             "elabel_dict": self.elabel_dict,
             "ndegree_dict": self.ndegree_dict,
+            "cc_dict": self.cc_dict
         }
         save_graphs(str(graph_path), self.graphs, label_dict)
         save_info(str(info_path), info_dict)
@@ -396,6 +396,7 @@ class GNNDataset(DGLDataset):
         self.N = info_dict["N"]
         self.n = info_dict["n"]
         self.m = info_dict["m"]
+        self.cc = info_dict["cc"]
         self.self_loop = info_dict["self_loop"]
         self.gclasses = info_dict["gclasses"]
         self.pclasses = info_dict["pclasses"]
@@ -407,6 +408,7 @@ class GNNDataset(DGLDataset):
         self.nlabel_dict = info_dict["nlabel_dict"]
         self.elabel_dict = info_dict["elabel_dict"]
         self.ndegree_dict = info_dict["ndegree_dict"]
+        self.cc_dict = info_dict["cc_dict"]
 
     def has_cache(self):
         graph_path = os.path.join(
@@ -450,8 +452,8 @@ def get_dataloader(dataset, batch_size, shuffle, collate_fn=GNNDataset.collate_g
     return data_loader
 
 
-def get_data(batch_size=8, dataset_class=GNNDataset, collate_fn=GNNDataset.collate_gnn, **kwargs):
-    dr = DataReader(**kwargs)
+def get_data(batch_size=6, dataset_class=GNNDataset, collate_fn=GNNDataset.collate_gnn, **kwargs):
+    dr = GNNDataReader(**kwargs)
     train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'), dr.mlb), batch_size, True, collate_fn)
     dev_data_loader = get_dataloader(dataset_class(dr.get_dataset('dev'), dr.mlb), batch_size, False, collate_fn)
     test_data_loader = get_dataloader(dataset_class(dr.get_dataset('test'), dr.mlb), batch_size, False, collate_fn)
@@ -468,9 +470,9 @@ if __name__ == '__main__':
                                     prune_cui=True,
                                     cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",
                                     vocab_fn="processed_full_umls_pruned.json")
-        d_id, x, x_token, y, doc_size = data_reader.get_dataset('train')[0]
+        d_id, x, x_token, y, doc_size = data_reader.get_dataset('dev')[0]
         print(f"id: {d_id}, x: {x}\n, {x_token}, y: {y}, doc_size: {doc_size}")
-        train_stats = data_reader.get_dataset_stats("train")
+        train_stats = data_reader.get_dataset_stats("dev")
 
     if check_gnn_dataset:
         data_reader = GNNDataReader(data_dir="../../data/mimic3",
