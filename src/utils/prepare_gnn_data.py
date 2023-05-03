@@ -1,7 +1,6 @@
 import networkx
 import torch
 import dgl
-from dgl.data import DGLDataset
 from dgl.dataloading import GraphDataLoader
 from dgl.data.utils import save_graphs, save_info, load_graphs, load_info
 import os
@@ -9,7 +8,9 @@ import itertools
 import numpy as np
 
 from src.utils.corpus_readers import ProcessedIterExtended
-from src.utils.prepare_laat_data import DataReader
+from src.utils.prepare_laat_data import DataReader, Dataset, get_dataloader
+from src.utils.config import PROJ_FOLDER
+
 
 os.environ['DGLBACKEND'] = 'pytorch'
 
@@ -24,7 +25,7 @@ class GNNDataReader(DataReader):
     3) Calculate stats for each partition
     """
     def __init__(self,
-                 data_dir="../../data/mimic3",
+                 data_dir=f"{PROJ_FOLDER / 'data' / 'mimic3'}",
                  version="50",
                  input_type="umls",
                  prune_cui=True,
@@ -103,7 +104,7 @@ class GNNDataReader(DataReader):
     # def get_dataset(self, split): --> unchanged from prepare_laat_data.DataReader.get_dataset(self, split)
 
 
-class GNNDataset(DGLDataset):
+class GNNDataset(dgl.data.DGLDataset):
 
     def __init__(self,
                  dataset,
@@ -112,8 +113,8 @@ class GNNDataset(DGLDataset):
                  emb_name="snomedcase4",
                  mode="base",  # graph building mode, base vs <name_of_experiment>
                  self_loop=True,
-                 raw_dir="../../data",
-                 save_dir="../../data/gnn_data",  # save_path = os.path.join(save_dir, self.name)
+                 raw_dir=f"{PROJ_FOLDER / 'data'}",
+                 save_dir=f"{PROJ_FOLDER / 'data' / 'gnn_data'}",  # save_path = os.path.join(save_dir, self.name)
                  force_reload=True,
                  verbose=False,
                  transform=None,
@@ -160,7 +161,7 @@ class GNNDataset(DGLDataset):
         self.nattrs_flag = False
         self.nlabels_flag = False
 
-        super(GNNDataset, self).__init__(
+        super().__init__(
             name=name,
             hash_key=(name, emb_name, mode, self_loop),
             raw_dir=raw_dir,
@@ -435,22 +436,21 @@ class GNNDataset(DGLDataset):
 
         # concat labels Tensors in self.labels to be of shape num doc * num label classes
         # from list of torch.Tensors, dtype float32 --> this step should be done per batch at collate_fn
-        batched_labels = torch.cat(labels, dim=0)
+        # batched_labels = torch.cat(labels, dim=0)
 
-        return batched_graph, batched_labels
+        return batched_graph, torch.stack(labels, dim=0)
 
-
+"""
 def get_dataloader(dataset, batch_size, shuffle, collate_fn=GNNDataset.collate_gnn, num_workers=8):
     data_loader = GraphDataLoader(
         dataset=dataset,
         collate_fn=collate_fn,
         batch_size=batch_size,
         shuffle=shuffle,
-        drop_last=False,
         num_workers=num_workers
     )
     return data_loader
-
+"""
 
 def get_data(batch_size=6, dataset_class=GNNDataset, collate_fn=GNNDataset.collate_gnn, **kwargs):
     dr = GNNDataReader(**kwargs)
@@ -463,8 +463,9 @@ def get_data(batch_size=6, dataset_class=GNNDataset, collate_fn=GNNDataset.colla
 if __name__ == '__main__':
     check_gnn_data_reader = False
     check_gnn_dataset = True
+    check_gnn_dataloader = True
     if check_gnn_data_reader:
-        data_reader = GNNDataReader(data_dir="../../data/mimic3",
+        data_reader = GNNDataReader(data_dir=f"{PROJ_FOLDER / 'data' / 'mimic3'}",
                                     version="full",
                                     input_type="umls",
                                     prune_cui=True,
@@ -475,7 +476,7 @@ if __name__ == '__main__':
         train_stats = data_reader.get_dataset_stats("dev")
 
     if check_gnn_dataset:
-        data_reader = GNNDataReader(data_dir="../../data/mimic3",
+        data_reader = GNNDataReader(data_dir=f"{PROJ_FOLDER / 'data' / 'mimic3'}",
                                     version="full",
                                     input_type="umls",
                                     prune_cui=True,
@@ -488,8 +489,20 @@ if __name__ == '__main__':
         g_sample, label_sample = gnn_dataset[0]
         print(g_sample)
         print(label_sample)
+        print(isinstance(gnn_dataset, dgl.data.DGLDataset))
+        print(isinstance(gnn_dataset, Dataset))
 
-
+    if check_gnn_dataloader:
+        sample_tr_dataloader = get_dataloader(dataset=gnn_dataset,
+                                              batch_size=6,
+                                              shuffle=True,
+                                              collate_fn=GNNDataset.collate_gnn)
+        g_batch, labels_batch = next(iter(sample_tr_dataloader))
+        print(g_batch, type(g_batch))
+        print(labels_batch)
+        print(type(labels_batch))
+        print(labels_batch.shape)
     # sem_info_iter = ProcessedIterExtended("../../data/umls/semantic_info.csv", header=True, delimiter="\t")
     # sem_info = list(sem_info_iter)
     # print(sem_info[0])
+
