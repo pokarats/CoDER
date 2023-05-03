@@ -67,15 +67,12 @@ def load_model(_log,
     if cui_embedding_path is not None:
         cui_embed_matrix = np.load(f"{cui_embedding_path}")
         cui_w2v_weights_from_np = torch.Tensor(cui_embed_matrix)
-        dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size,
-                                                                            CombinedDataset,
+        dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size, CombinedDataset,
                                                                             CombinedDataset.mimic_collate_fn,
                                                                             **dr_params)
     else:
-        dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size,
-                                                                            Dataset,
-                                                                            Dataset.mimic_collate_fn,
-                                                                            **dr_params)
+        dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size, Dataset,
+                                                                            Dataset.mimic_collate_fn, **dr_params)
     _log.info(f"Vocab size: {len(dr.featurizer.vocab)}\n"
               f"Embedding Dim: {embed_matrix.shape[1]}\n"
               f"Num Labels: {len(dr.mlb.classes_)}\n")

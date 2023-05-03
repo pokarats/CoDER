@@ -16,7 +16,10 @@ import json
 import torch
 import torch.utils.data as data
 import itertools
+import dgl
 from torch.nn.utils.rnn import pad_sequence
+from dgl.dataloading import GraphDataLoader
+
 
 from pathlib import Path
 from src.utils.corpus_readers import MimicDocIter, MimicCuiDocIter, MimicCuiSelectedTextIter
@@ -348,19 +351,25 @@ class CombinedDataset(Dataset):
 
 
 def get_dataloader(dataset, batch_size, shuffle, collate_fn=Dataset.mimic_collate_fn, num_workers=8):
-    data_loader = data.DataLoader(
+    if isinstance(dataset, Dataset):
+        loader_func = data.DataLoader
+    elif isinstance(dataset, dgl.data.DGLDataset):
+        loader_func = GraphDataLoader
+    else:
+        raise NotImplementedError(f"Invalid DataLoader/Dataset Option!!!")
+    data_loader = loader_func(
         dataset=dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        pin_memory=True,
         num_workers=num_workers,
-        collate_fn=collate_fn
+        collate_fn=collate_fn,
+        pin_memory=True,
     )
     return data_loader
 
 
-def get_data(batch_size=8, dataset_class=Dataset, collate_fn=Dataset.mimic_collate_fn, **kwargs):
-    dr = DataReader(**kwargs)
+def get_data(batch_size=8, dataset_class=Dataset, collate_fn=Dataset.mimic_collate_fn, reader=DataReader, **kwargs):
+    dr = reader(**kwargs)
     train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'), dr.mlb), batch_size, True, collate_fn)
     dev_data_loader = get_dataloader(dataset_class(dr.get_dataset('dev'), dr.mlb), batch_size, False, collate_fn)
     test_data_loader = get_dataloader(dataset_class(dr.get_dataset('test'), dr.mlb), batch_size, False, collate_fn)
@@ -419,8 +428,7 @@ if __name__ == '__main__':
         dr, trd, dvd, ted = get_data(batch_size=8, dataset_class=CombinedDataset,
                                      collate_fn=CombinedDataset.mimic_collate_fn, data_dir="../../data/mimic3",
                                      version="50", input_type="combined", prune_cui=True,
-                                     cui_prune_file="50_cuis_to_discard_snomedbase.pickle",
-                                     vocab_fn=None)
+                                     cui_prune_file="50_cuis_to_discard_snomedbase.pickle", vocab_fn=None)
         temp = iter(trd)
         x_txt, x_umls, y = next(temp)
         print(f"x_txt shape: {x_txt.shape}, type: {x_txt.dtype}\n")
