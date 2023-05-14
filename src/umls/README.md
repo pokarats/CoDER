@@ -24,4 +24,4 @@ splits following their steps. We use [DGL KE](https://github.com/awslabs/dgl-ke)
 
 We check the coverage in terms of the % of CUIs in the MIMIC-III dataset from our baseline experiments that are also 
 present in SNOMED CT and obtain the embedding weights for those CUI entities (.npy file) with this script: 
-`mimi_snomed_kge.py`.
+`mimic_snomed_kge.py`.

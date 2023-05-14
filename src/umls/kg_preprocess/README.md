@@ -24,6 +24,7 @@ Steps:
 2. run `./src/umls/kg_preprocess/kg_transductive.sh`
    1. this generates the necessary train/dev/test files for training KGE based on SNOMED_CT Knowldge Base
    2. All generated data files are in `data/umls`
+      - **NOTE:** `semantic_info.csv` in this directory will be used later for SEMANTIC TYPE/GROUP info for GNNDataset
 
 
 ### File Description
