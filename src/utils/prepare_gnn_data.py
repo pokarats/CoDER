@@ -440,6 +440,7 @@ class GNNDataset(dgl.data.DGLDataset):
 
         return batched_graph, torch.stack(labels, dim=0)
 
+
 """
 def get_dataloader(dataset, batch_size, shuffle, collate_fn=GNNDataset.collate_gnn, num_workers=8):
     data_loader = GraphDataLoader(
@@ -450,7 +451,7 @@ def get_dataloader(dataset, batch_size, shuffle, collate_fn=GNNDataset.collate_g
         num_workers=num_workers
     )
     return data_loader
-"""
+
 
 def get_data(batch_size=6, dataset_class=GNNDataset, collate_fn=GNNDataset.collate_gnn, **kwargs):
     dr = GNNDataReader(**kwargs)
@@ -458,7 +459,7 @@ def get_data(batch_size=6, dataset_class=GNNDataset, collate_fn=GNNDataset.colla
     dev_data_loader = get_dataloader(dataset_class(dr.get_dataset('dev'), dr.mlb), batch_size, False, collate_fn)
     test_data_loader = get_dataloader(dataset_class(dr.get_dataset('test'), dr.mlb), batch_size, False, collate_fn)
     return dr, train_data_loader, dev_data_loader, test_data_loader
-
+"""
 
 if __name__ == '__main__':
     check_gnn_data_reader = False

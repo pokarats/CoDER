@@ -170,7 +170,8 @@ class DataReader:
                                                vocab_fn)
             txt_vocab_fname = self.txt_w2v_dir / (f"processed_full_text_pruned.json" if second_txt_vocab_fn is None
                                                   else second_txt_vocab_fn)
-            self.featurizer = Features(json.load(open(f"{umls_vocab_fname}")))
+            with open(f"{umls_vocab_fname}") as js_file:
+                self.featurizer = Features(json.load(js_file))
             self.txt_featurizer = Features(json.load(open(f"{txt_vocab_fname}")))
         else:
             try:
@@ -186,7 +187,8 @@ class DataReader:
                 sys.exit(1)
 
             # load json vocab mapping word to indx, tokens not in vocab will be replaced with unk token
-            self.featurizer = Features(json.load(open(f"{vocab_fname}")))
+            with open(f"{vocab_fname}") as js_file:
+                self.featurizer = Features(json.load(js_file))
         self.max_seq_length = max_seq_length
 
         # store doc_id to labels and split stats: min, max, mean num tokens/doc
