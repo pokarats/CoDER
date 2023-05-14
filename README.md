@@ -168,20 +168,22 @@ CUIS in the MIMIC dataset. This reduced representation correlates with the lower
 surprising, however, that with only 50% of CUIs present, the model can still achieve higher evaluation metrics than
 using the baseline W2V embeddings for the CUI input type.
 
+Please see [Extension Results](/res/README.md#extension-results) for further details.
+
 ### Combined Text and CUI Input Model
 
 We also experimented with training the baseline LAAT model with both types of input: text and CUI. We used W2V embeddings
 for the text input type and the case4 KGE for the CUI input type. The idea is to investigate if adding hierachical or 
 relational information in the KGE-represented CUIs to the text-input data improves model's performance.
 
-### GNN
+### WIP:GNN
 
 From the results of the Combined and KGE models, the text-input LAAT model shows the highest P, R, and F1 scores.
 We hypothesized that the LSTM-based encoder in the baseline LAAT model favors sequential embeddings and input type.
 As a result, any gain in hierachical or relational information from KGE pretraining would have been negated by the
 encoder model. 
 
-To verify this, we experimented with a GNN-based encoder model with pre-trained KGE.
+To verify this, we experimented with a GNN-based encoder model with pre-trained KGE. (Results pending implementation)
 
 #### GCN
 
@@ -191,22 +193,34 @@ as a graph classification problem using GCN and a classification layer.
 
 ## TODO's + Notes
 
-1. add CLEF file format capability for running baseline and future experiments for 
-   processing input text and label IDs
-   1. possible to experiment with other datasets that have been clef-formatted
-2. accommodate multi-gpu runs?
-3. KGE, GNN implementation
-4. Hierachical eval metrics, need ICD-9 Tree structure for HEMKIT
-
-
-- KGE 
-  - instead of w2v, try this for the CUI-input model with the LAAT model
-  - [SNOMED KGE](https://github.com/dchang56/snomed_kge)-->use [DGL implementation](https://github.com/awslabs/dgl-ke)
-- GNN
+### Next Steps
+1. Have baseline GNN model working with baseline edge building schemes (edges between CUIs belong to the same sem type)
+2. Extend from baseline Graph Dataset base-line edge building to incorporate ideas in the following papers:
   - [GNN-XML paper](http://arxiv.org/abs/2012.05860) --> dig into how they initialize GIN and build their graph/Adj Matrix??
   - [DFGN paper](https://aclanthology.org/P19-1617) --> for graph/Adj Matrix building
   - [GCT paper](https://ojs.aaai.org/index.php/AAAI/article/view/5400) --> for graph/Adj Matrix idea
   - [HyperCore](https://aclanthology.org/2020.acl-main.282) --> for how to aggregate graph with doc text
+3. Experiments:
+   1. SNOMED_KGE + base GNN model
+   2. SNOMED_KGE + extenion GNN Model
+   3. Fine tune and experiments with other types of embeddings?
+   4. Post analysis
+
+### Optional
+
+1. add CLEF file format capability for running baseline and future experiments for 
+   processing input text and label IDs
+   1. possible to experiment with other datasets that have been clef-formatted
+2. accommodate multi-gpu runs
+3. Hierachical eval metrics, need ICD-9 Tree structure for HEMKIT
+
+### Explainability Extensions (not part of thesis):
+1. GNNExplainer module integration with DGL`
+
+
+
+
+
   
 
 
