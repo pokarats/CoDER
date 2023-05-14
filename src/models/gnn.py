@@ -87,30 +87,31 @@ class GCNModel(nn.Module):
 # GCN model for graph classification
 # from DGL example
 class GCNGraphClassification(nn.Module):
-    def __init__(self, in_feats, h_feats, num_classes, dropout=0.3):
+    def __init__(self, de, u, da, L, dropout=0.3):
         super(GCNGraphClassification, self).__init__()
-        self.conv1 = dgl.nn.GraphConv(in_feats, h_feats)
-        self.conv2 = dgl.nn.GraphConv(h_feats, h_feats)
+        self.conv1 = dgl.nn.GraphConv(de, u)
+        self.conv2 = dgl.nn.GraphConv(u, da)
         self.dropout = nn.Dropout(dropout)
-        self.labels_output = nn.Linear(h_feats, num_classes, bias=True)
+        self.labels_output = nn.Linear(da, L, bias=True)
         self.labels_loss_fct = nn.BCEWithLogitsLoss()
 
     def forward(self, g, in_feat, y=None):
+        # in_feat is the node embedding, each node represents CUI, so embedding size == 100 as in LAAT
         h = self.conv1(g, in_feat)
         h = F.relu(h)
         if self.dropout is not None:
             h = self.dropout(h)
         h = self.conv2(g, h)
         g.ndata["h"] = h  # b x num nodes x h_feats
-        print(f"h.size, {h.size()}")
+        # print(f"h.size, {h.size()}")
         # graph representation by averaging all the node representations.
         hg = dgl.mean_nodes(g, "h")  # b x h_feats
-        print(f"hg.size, {hg.size()}")
+        # print(f"hg.size, {hg.size()}")
         labels_output = self.labels_output(hg)  # b x num_classes
-        print(f"output size: {labels_output.size()}")
+        # print(f"output size: {labels_output.size()}")
         output = (labels_output,)
         if y is not None:
-            print("y size:", y.size())
+            # print("y size:", y.size())
             loss = self.labels_loss_fct(labels_output, y)  # .sum(-1).mean()
             output += (loss,)
         return output
@@ -253,24 +254,15 @@ if __name__ == '__main__':
     test_loader, _, _ = dummy_test
 
     # Create the model with given dimensions
-    model = GCNGraphClassification(dim_nfeats, 256, num_label_classes)
+    model = GCNGraphClassification(de=dim_nfeats, u=256, da=256, L=num_label_classes, dropout=0.3)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     for epoch in range(3):
-        for batched_graph, labels in tr_loader:
+        for batch_i, (batched_graph, labels) in enumerate(tr_loader):
             pred_logits, loss = model(batched_graph, batched_graph.ndata["attr"].float(), labels.float())
-            print(f"Epoch: {epoch} -- Pred:\n{pred_logits}")
-            print(f"Epoch: {epoch} -- Loss: {loss}")
+            print(f"Epoch_batch: {epoch}_{batch_i} -- Pred:\n{pred_logits}")
+            print(f"Epoch_batch: {epoch}_{batch_i} -- Loss: {loss}")
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-"""
-    num_correct = 0
-    num_tests = 0
-    for batched_graph, labels in test_loader:
-        pred = model(batched_graph, batched_graph.ndata["attr"].float())
-        num_correct += (pred.argmax(1) == labels).sum().item()
-        num_tests += len(labels)
-
-    print("Test accuracy:", num_correct / num_tests)
-"""
+    print(f"GCNClassification Model working!!")

@@ -116,7 +116,7 @@ class GNNDataset(dgl.data.DGLDataset):
                  self_loop=True,
                  raw_dir=f"{PROJ_FOLDER / 'data'}",
                  save_dir=f"{PROJ_FOLDER / 'data' / 'gnn_data'}",  # save_path = os.path.join(save_dir, self.name)
-                 force_reload=True,
+                 force_reload=False,
                  verbose=False,
                  transform=None,
                  ):
