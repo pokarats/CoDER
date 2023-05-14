@@ -11,7 +11,6 @@ from src.utils.corpus_readers import ProcessedIterExtended
 from src.utils.prepare_laat_data import DataReader, Dataset, get_dataloader
 from src.utils.config import PROJ_FOLDER
 
-
 os.environ['DGLBACKEND'] = 'pytorch'
 
 
@@ -24,6 +23,7 @@ class GNNDataReader(DataReader):
     2) MLB for each sample labels
     3) Calculate stats for each partition
     """
+
     def __init__(self,
                  data_dir=f"{PROJ_FOLDER / 'data' / 'mimic3'}",
                  version="50",
@@ -76,7 +76,8 @@ class GNNDataReader(DataReader):
                     self.doc2len[split] = dict()
                     self.doc2len[split][doc_id] = len(unique_tokens_only)
 
-                yield doc_id, input_ids, list(unique_tokens_only), self.mlb.transform([doc_labels]), len(unique_tokens_only)
+                yield doc_id, input_ids, list(unique_tokens_only), self.mlb.transform([doc_labels]), len(
+                    unique_tokens_only)
         else:
             raise NotImplementedError(f"Invalid input_type option!")
 
@@ -494,10 +495,10 @@ if __name__ == '__main__':
         print(isinstance(gnn_dataset, Dataset))
 
     if check_gnn_dataloader:
-        sample_tr_dataloader = get_dataloader(dataset=gnn_dataset,
-                                              batch_size=6,
-                                              shuffle=True,
-                                              collate_fn=GNNDataset.collate_gnn)
+        sample_tr_dataloader, emb_size, num_labels = get_dataloader(dataset=gnn_dataset,
+                                                                    batch_size=6,
+                                                                    shuffle=True,
+                                                                    collate_fn=GNNDataset.collate_gnn)
         g_batch, labels_batch = next(iter(sample_tr_dataloader))
         print(g_batch, type(g_batch))
         print(labels_batch)
@@ -506,4 +507,3 @@ if __name__ == '__main__':
     # sem_info_iter = ProcessedIterExtended("../../data/umls/semantic_info.csv", header=True, delimiter="\t")
     # sem_info = list(sem_info_iter)
     # print(sem_info[0])
-
