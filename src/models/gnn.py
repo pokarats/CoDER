@@ -3,11 +3,17 @@ Adapted from examples from https://docs.dgl.ai/en/rying_test/guide/minibatch.htm
 """
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import dgl
 from dgl.nn.pytorch.conv import GINConv
 from dgl.nn.pytorch.glob import SumPooling
 from dgl.dataloading import DataLoader, MultiLayerFullNeighborSampler
+from src.utils.config import PROJ_FOLDER
+from src.utils.prepare_laat_data import get_data
+from src.utils.prepare_gnn_data import GNNDataReader, GNNDataset
 from tqdm import tqdm
+
+DATA_DIR = f"{PROJ_FOLDER / 'data' / 'mimic3'}"
 
 
 class ScorePredictor(nn.Module):
@@ -79,19 +85,35 @@ class GCNModel(nn.Module):
 
 
 # GCN model for graph classification
-# from GDL example
+# from DGL example
 class GCNGraphClassification(nn.Module):
-    def __init__(self, in_feats, h_feats, num_classes):
+    def __init__(self, in_feats, h_feats, num_classes, dropout=0.3):
         super(GCNGraphClassification, self).__init__()
         self.conv1 = dgl.nn.GraphConv(in_feats, h_feats)
-        self.conv2 = dgl.nn.GraphConv(h_feats, num_classes)
+        self.conv2 = dgl.nn.GraphConv(h_feats, h_feats)
+        self.dropout = nn.Dropout(dropout)
+        self.labels_output = nn.Linear(h_feats, num_classes, bias=True)
+        self.labels_loss_fct = nn.BCEWithLogitsLoss()
 
-    def forward(self, g, in_feat):
+    def forward(self, g, in_feat, y=None):
         h = self.conv1(g, in_feat)
-        h = nn.relu(h)
+        h = F.relu(h)
+        if self.dropout is not None:
+            h = self.dropout(h)
         h = self.conv2(g, h)
-        g.ndata["h"] = h
-        return dgl.mean_nodes(g, "h")
+        g.ndata["h"] = h  # b x num nodes x h_feats
+        print(f"h.size, {h.size()}")
+        # graph representation by averaging all the node representations.
+        hg = dgl.mean_nodes(g, "h")  # b x h_feats
+        print(f"hg.size, {hg.size()}")
+        labels_output = self.labels_output(hg)  # b x num_classes
+        print(f"output size: {labels_output.size()}")
+        output = (labels_output,)
+        if y is not None:
+            print("y size:", y.size())
+            loss = self.labels_loss_fct(labels_output, y)  # .sum(-1).mean()
+            output += (loss,)
+        return output
 
 
 class MLP(nn.Module):
@@ -212,3 +234,43 @@ class GraphSAGE(nn.Module):
                 y[output_nodes] = h.to(buffer_device)
             feat = y
         return y
+
+
+if __name__ == '__main__':
+    # load dummy dataset and dataloaders
+    dummy_dr, dummy_tr, dummy_dev, dummy_test = get_data(batch_size=2,
+                                                         dataset_class=GNNDataset,
+                                                         collate_fn=GNNDataset.collate_gnn,
+                                                         reader=GNNDataReader,
+                                                         data_dir=DATA_DIR,
+                                                         version="dummy",
+                                                         input_type="umls",
+                                                         prune_cui=True,
+                                                         cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",
+                                                         vocab_fn="processed_full_umls_pruned.json")
+    tr_loader, dim_nfeats, num_label_classes = dummy_tr
+    dev_loader, _, _ = dummy_dev
+    test_loader, _, _ = dummy_test
+
+    # Create the model with given dimensions
+    model = GCNGraphClassification(dim_nfeats, 256, num_label_classes)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+    for epoch in range(3):
+        for batched_graph, labels in tr_loader:
+            pred_logits, loss = model(batched_graph, batched_graph.ndata["attr"].float(), labels.float())
+            print(f"Epoch: {epoch} -- Pred:\n{pred_logits}")
+            print(f"Epoch: {epoch} -- Loss: {loss}")
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+"""
+    num_correct = 0
+    num_tests = 0
+    for batched_graph, labels in test_loader:
+        pred = model(batched_graph, batched_graph.ndata["attr"].float())
+        num_correct += (pred.argmax(1) == labels).sum().item()
+        num_tests += len(labels)
+
+    print("Test accuracy:", num_correct / num_tests)
+"""
