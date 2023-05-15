@@ -27,7 +27,8 @@ if platform.system() != 'Darwin':
 from models.laat import LAAT
 from models.combined_laat import CombinedLAAT
 from models.train_eval_laat import train, evaluate, generate_preds_file
-from utils.prepare_laat_data import get_data, Dataset, CombinedDataset
+from utils.prepare_laat_data import DataReader, Dataset, CombinedDataset
+from src.utils.corpus_readers import get_data
 from utils.corpus_readers import MimicCuiSelectedTextIter
 from utils.config import PROJ_FOLDER, MODEL_FOLDER, DEV_API_KEY
 from utils.eval import all_metrics
@@ -69,10 +70,13 @@ def load_model(_log,
         cui_w2v_weights_from_np = torch.Tensor(cui_embed_matrix)
         dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size, CombinedDataset,
                                                                             CombinedDataset.mimic_collate_fn,
+                                                                            DataReader,
                                                                             **dr_params)
     else:
         dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size, Dataset,
-                                                                            Dataset.mimic_collate_fn, **dr_params)
+                                                                            Dataset.mimic_collate_fn, DataReader,
+                                                                            **dr_params)
+
     _log.info(f"Vocab size: {len(dr.featurizer.vocab)}\n"
               f"Embedding Dim: {embed_matrix.shape[1]}\n"
               f"Num Labels: {len(dr.mlb.classes_)}\n")

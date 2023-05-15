@@ -7,8 +7,8 @@ import os
 import itertools
 import numpy as np
 
-from src.utils.corpus_readers import ProcessedIterExtended
-from src.utils.prepare_laat_data import DataReader, Dataset, get_dataloader
+from src.utils.corpus_readers import ProcessedIterExtended, get_dataloader
+from src.utils.prepare_laat_data import DataReader, Dataset
 from src.utils.config import PROJ_FOLDER
 
 os.environ['DGLBACKEND'] = 'pytorch'
@@ -111,7 +111,7 @@ class GNNDataset(dgl.data.DGLDataset):
                  dataset,
                  mlb,
                  name="train",
-                 emb_name="snomedcase4",
+                 embedding_type="snomedcase4",
                  mode="base",  # graph building mode, base vs <name_of_experiment>
                  self_loop=True,
                  raw_dir=f"{PROJ_FOLDER / 'data'}",
@@ -123,8 +123,8 @@ class GNNDataset(dgl.data.DGLDataset):
 
         self._name = name  # MIMIC-III-CUI train/dev/test partition
         self.ds_name = "mimic3_cui"
-        self.emb_name = emb_name
-        self.mode = mode
+        self.embedding_type = embedding_type if embedding_type is not None else "snomedcase4"
+        self.mode = mode if mode is not None else "base"
 
         self.data = dataset  # DataReader.get_dataset('<split: train/dev/test>')
         # self.id2label = {k: v for k, v in enumerate(self.mlb.classes_)}
@@ -133,7 +133,7 @@ class GNNDataset(dgl.data.DGLDataset):
         self.cui2tui = dict()  # mapping cui to tui from semantic_info.csv <--\t separated, col 2
         self.cui2sg = dict()  # mapping cui to semantic group from semantic_info.csv <-- \t separated col 4
 
-        self.self_loop = self_loop
+        self.self_loop = self_loop if self_loop is not None else True
         self.graphs = []
         self.labels = []
 
@@ -164,7 +164,7 @@ class GNNDataset(dgl.data.DGLDataset):
 
         super().__init__(
             name=name,
-            hash_key=(name, emb_name, mode, self_loop),
+            hash_key=(name, embedding_type, mode, self_loop),
             raw_dir=raw_dir,
             save_dir=save_dir,
             force_reload=force_reload,
@@ -211,7 +211,7 @@ class GNNDataset(dgl.data.DGLDataset):
             self.raw_dir,
             "linked_data",
             "model",
-            f"processed_full_{self.emb_name}_pruned.npy"
+            f"processed_full_{self.embedding_type}_pruned.npy"
         )
 
     def _build_graph_edges(self, n_nodes, input_tokens):
@@ -354,11 +354,11 @@ class GNNDataset(dgl.data.DGLDataset):
 
     def save(self):
         graph_path = os.path.join(
-            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.bin"
+            self.save_path, f"{self.embedding_type}_{self.name}_{self.hash}.bin"
         )
 
         info_path = os.path.join(
-            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.pkl"
+            self.save_path, f"{self.embedding_type}_{self.name}_{self.hash}.pkl"
         )
         label_dict = {"labels": self.labels}
         info_dict = {
@@ -384,10 +384,10 @@ class GNNDataset(dgl.data.DGLDataset):
 
     def load(self):
         graph_path = os.path.join(
-            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.bin"
+            self.save_path, f"{self.embedding_type}_{self.name}_{self.hash}.bin"
         )
         info_path = os.path.join(
-            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.pkl"
+            self.save_path, f"{self.embedding_type}_{self.name}_{self.hash}.pkl"
         )
         graphs, label_dict = load_graphs(str(graph_path))
         info_dict = load_info(str(info_path))
@@ -414,10 +414,10 @@ class GNNDataset(dgl.data.DGLDataset):
 
     def has_cache(self):
         graph_path = os.path.join(
-            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.bin"
+            self.save_path, f"{self.embedding_type}_{self.name}_{self.hash}.bin"
         )
         info_path = os.path.join(
-            self.save_path, f"{self.emb_name}_{self.name}_{self.hash}.pkl"
+            self.save_path, f"{self.embedding_type}_{self.name}_{self.hash}.pkl"
         )
         if os.path.exists(graph_path) and os.path.exists(info_path):
             return True
@@ -441,26 +441,6 @@ class GNNDataset(dgl.data.DGLDataset):
 
         return batched_graph, torch.stack(labels, dim=0)
 
-
-"""
-def get_dataloader(dataset, batch_size, shuffle, collate_fn=GNNDataset.collate_gnn, num_workers=8):
-    data_loader = GraphDataLoader(
-        dataset=dataset,
-        collate_fn=collate_fn,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        num_workers=num_workers
-    )
-    return data_loader
-
-
-def get_data(batch_size=6, dataset_class=GNNDataset, collate_fn=GNNDataset.collate_gnn, **kwargs):
-    dr = GNNDataReader(**kwargs)
-    train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'), dr.mlb), batch_size, True, collate_fn)
-    dev_data_loader = get_dataloader(dataset_class(dr.get_dataset('dev'), dr.mlb), batch_size, False, collate_fn)
-    test_data_loader = get_dataloader(dataset_class(dr.get_dataset('test'), dr.mlb), batch_size, False, collate_fn)
-    return dr, train_data_loader, dev_data_loader, test_data_loader
-"""
 
 if __name__ == '__main__':
     check_gnn_data_reader = False

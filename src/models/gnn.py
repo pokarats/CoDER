@@ -9,11 +9,58 @@ from dgl.nn.pytorch.conv import GINConv
 from dgl.nn.pytorch.glob import SumPooling
 from dgl.dataloading import DataLoader, MultiLayerFullNeighborSampler
 from src.utils.config import PROJ_FOLDER
-from src.utils.prepare_laat_data import get_data
+from src.utils.corpus_readers import get_data
 from src.utils.prepare_gnn_data import GNNDataReader, GNNDataset
 from tqdm import tqdm
 
 DATA_DIR = f"{PROJ_FOLDER / 'data' / 'mimic3'}"
+
+
+class GCNGraphClassification(nn.Module):
+    """
+    Baseline 2-layer GCN Model with 1-fc layer for Graph Classification adapted from DGL examples and tutorials
+    https://github.com/dmlc/dgl/blob/master/examples/pytorch/gcn/train.py
+    https://github.com/liketheflower/dgl_examples/tree/cc42d8e00314bd4efb1fb4e8f1167ffb01ffff14/graph_classification
+
+    Added BCELogitsLoss func for when labels are provided, otherwise forward func only returns prediction logits
+
+    TODO: 1) add option to specity aggregator besides mean 2) batch norm? 3) integrate Label-Attention from LAAT?
+    """
+    def __init__(self, de, u, da, L, dropout=0.3):
+        super(GCNGraphClassification, self).__init__()
+        self.conv1 = dgl.nn.GraphConv(de, u)
+        self.conv2 = dgl.nn.GraphConv(u, da)
+        self.dropout = nn.Dropout(dropout)
+        self.labels_output = nn.Linear(da, L, bias=True)
+        self.labels_loss_fct = nn.BCEWithLogitsLoss()
+
+    def forward(self, g, in_feat, y=None):
+        # in_feat is the node embedding, each node represents CUI, so embedding size == 100 as in LAAT
+        h = self.conv1(g, in_feat)
+        h = F.relu(h)
+        if self.dropout is not None:
+            h = self.dropout(h)
+        h = self.conv2(g, h)
+        g.ndata["h"] = h  # b x num nodes x h_feats
+        # print(f"h.size, {h.size()}")
+        # graph representation by averaging all the node representations.
+        hg = dgl.mean_nodes(g, "h")  # b x h_feats
+        # print(f"hg.size, {hg.size()}")
+        labels_output = self.labels_output(hg)  # b x num_classes
+        # print(f"output size: {labels_output.size()}")
+        output = (labels_output,)
+        if y is not None:
+            # print("y size:", y.size())
+            loss = self.labels_loss_fct(labels_output, y)  # .sum(-1).mean()
+            output += (loss,)
+        return output
+
+
+"""
+===========================================================================
+Codes below are still under development and are not currently being used!!!
+===========================================================================
+"""
 
 
 class ScorePredictor(nn.Module):
@@ -82,39 +129,6 @@ class GCNModel(nn.Module):
         neg_score = self.predictor(negative_graph, x)
 
         return pos_score, neg_score
-
-
-# GCN model for graph classification
-# from DGL example
-class GCNGraphClassification(nn.Module):
-    def __init__(self, de, u, da, L, dropout=0.3):
-        super(GCNGraphClassification, self).__init__()
-        self.conv1 = dgl.nn.GraphConv(de, u)
-        self.conv2 = dgl.nn.GraphConv(u, da)
-        self.dropout = nn.Dropout(dropout)
-        self.labels_output = nn.Linear(da, L, bias=True)
-        self.labels_loss_fct = nn.BCEWithLogitsLoss()
-
-    def forward(self, g, in_feat, y=None):
-        # in_feat is the node embedding, each node represents CUI, so embedding size == 100 as in LAAT
-        h = self.conv1(g, in_feat)
-        h = F.relu(h)
-        if self.dropout is not None:
-            h = self.dropout(h)
-        h = self.conv2(g, h)
-        g.ndata["h"] = h  # b x num nodes x h_feats
-        # print(f"h.size, {h.size()}")
-        # graph representation by averaging all the node representations.
-        hg = dgl.mean_nodes(g, "h")  # b x h_feats
-        # print(f"hg.size, {hg.size()}")
-        labels_output = self.labels_output(hg)  # b x num_classes
-        # print(f"output size: {labels_output.size()}")
-        output = (labels_output,)
-        if y is not None:
-            # print("y size:", y.size())
-            loss = self.labels_loss_fct(labels_output, y)  # .sum(-1).mean()
-            output += (loss,)
-        return output
 
 
 class MLP(nn.Module):
@@ -255,7 +269,7 @@ if __name__ == '__main__':
 
     # Create the model with given dimensions
     model = GCNGraphClassification(de=dim_nfeats, u=256, da=256, L=num_label_classes, dropout=0.3)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(3):
         for batch_i, (batched_graph, labels) in enumerate(tr_loader):

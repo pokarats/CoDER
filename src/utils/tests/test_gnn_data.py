@@ -2,7 +2,7 @@ import unittest
 import dgl
 import itertools
 from src.utils.config import PROJ_FOLDER
-from src.utils.prepare_laat_data import get_data
+from src.utils.corpus_readers import get_data
 from src.utils.prepare_gnn_data import GNNDataReader, GNNDataset
 
 DATA_DIR = f"{PROJ_FOLDER / 'data' / 'mimic3'}"

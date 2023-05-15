@@ -15,13 +15,16 @@ import itertools
 from abc import ABC, abstractmethod
 import csv
 import platform
+import json
+from collections import deque
+import dgl
+from dgl.dataloading import GraphDataLoader
+from torch.utils import data
 
 if platform.python_version() < "3.8":
     import pickle5 as pickle
 else:
     import pickle
-import json
-from collections import deque
 
 
 class BaseIter(ABC):
@@ -393,6 +396,109 @@ class MimicCuiSelectedTextIter(BaseIter):
                     raise IndexError(f"MIMIC-III *.csv only has 5 columns; double check your file!")
 
 
+def get_dataloader(dataset, batch_size, shuffle, collate_fn, num_workers=8):
+    """
+
+    :param dataset: data.Dataset class for LAAT experiments or dgl.data.DGLDataset for GNN experiments with partitions
+    specified
+    :param batch_size:
+    :param shuffle: True/False
+    :type shuffle: bool
+    :param collate_fn: collate_fn for respective Dataset Class e.g. Dataset.mimic_collate_fn, DGLDataset.collate_fn etc
+    :return: data_loader for the specified dataset partition for LAAT experimenmts, for DGLDataset a tuple of dataloader
+    graph_embedding_size, number of label classes
+    :rtype:
+    """
+    if isinstance(dataset, data.Dataset):
+        loader_func = data.DataLoader
+    elif isinstance(dataset, dgl.data.DGLDataset):
+        loader_func = GraphDataLoader
+    else:
+        raise NotImplementedError(f"Invalid DataLoader/Dataset Option!!!")
+    data_loader = loader_func(
+        dataset=dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        collate_fn=collate_fn,
+        pin_memory=True,
+    )
+    if isinstance(dataset, dgl.data.DGLDataset):
+        # dim_nfeats is the embedding size in GNNDataset, gclasses == number of labels (50 or 8000+ for full)
+        graph_emb_size, num_label_classes = dataset.dim_nfeats, dataset.gclasses
+        return data_loader, graph_emb_size, num_label_classes
+    return data_loader
+
+
+def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
+    """
+    For DGLDataset, train/dev/test dataloader will be a tuple of dataloader, embedding_size, and num_label_classes
+
+    :param batch_size:
+    :type batch_size: int
+    :param dataset_class: Dataset or DGLDataset
+    :param collate_fn: Dataset.collate_fn or GNNDataset.collate_fn
+    :param reader: DataReader or GNNDataReader
+    :param kwargs: kwargs for DataReader/GNNDataReader Class, embedding_type, graph edge mode and self_loop options
+    for GNNDataset can be passed here
+    :return: datareader, train_data_loader, dev_data_loader, test_data_loader
+
+    """
+
+    dataset_class_attr = {k: kwargs.pop(k) for k in ["embedding_type", "mode", "self_loop"] if k in kwargs}
+    if not dataset_class_attr:
+        # in case attr dict is empty
+        dataset_class_attr = {"embedding_type": None,
+                              "mode": None,
+                              "self_loop": None}
+
+    # initialize datareader class after popping non-relevant keys
+    dr = reader(**kwargs)
+
+    if "laat_data" in str(dataset_class):
+        train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'),
+                                                         dr.mlb),
+                                           batch_size,
+                                           True,
+                                           collate_fn)
+        dev_data_loader = get_dataloader(dataset_class(dr.get_dataset('dev'),
+                                                       dr.mlb),
+                                         batch_size,
+                                         False,
+                                         collate_fn)
+        test_data_loader = get_dataloader(dataset_class(dr.get_dataset('test'),
+                                                        dr.mlb),
+                                          batch_size,
+                                          False,
+                                          collate_fn)
+    elif "gnn_data" in str(dataset_class):
+        train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'),
+                                                         dr.mlb,
+                                                         'train',
+                                                         **dataset_class_attr),
+                                           batch_size,
+                                           True,
+                                           collate_fn)
+        dev_data_loader = get_dataloader(dataset_class(dr.get_dataset('dev'),
+                                                       dr.mlb,
+                                                       'dev',
+                                                       **dataset_class_attr),
+                                         batch_size,
+                                         False,
+                                         collate_fn)
+        test_data_loader = get_dataloader(dataset_class(dr.get_dataset('test'),
+                                                        dr.mlb,
+                                                        'test',
+                                                        **dataset_class_attr),
+                                          batch_size,
+                                          False,
+                                          collate_fn)
+    else:
+        raise NotImplementedError(f"Invalid Dataset Class option!!!")
+
+    return dr, train_data_loader, dev_data_loader, test_data_loader
+
+
 if __name__ == '__main__':
     cui_doc_iter = MimicCuiDocIter("../../data/linked_data/50/dev_50_umls.txt")
     mimic_doc_iter = MimicDocIter("../../data/mimic3/50/dev_50.csv")
@@ -418,3 +524,6 @@ if __name__ == '__main__':
     print(f"dev last doc id: {dev_id}\n"
           f"dev last docs: {sents}\n"
           f"dev las doc len: {dev_len}\n")
+
+
+

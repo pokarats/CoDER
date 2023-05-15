@@ -10,19 +10,15 @@ https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/utils.py
 """
 
 import sys
-import os
 import numpy as np
 import json
 import torch
 import torch.utils.data as data
 import itertools
-import dgl
 from torch.nn.utils.rnn import pad_sequence
-from dgl.dataloading import GraphDataLoader
-
 
 from pathlib import Path
-from src.utils.corpus_readers import MimicDocIter, MimicCuiDocIter, MimicCuiSelectedTextIter
+from src.utils.corpus_readers import MimicDocIter, MimicCuiDocIter, MimicCuiSelectedTextIter, get_data
 from sklearn.preprocessing import MultiLabelBinarizer
 
 
@@ -350,48 +346,6 @@ class CombinedDataset(Dataset):
         label_ids = torch.cat(label_ids, dim=0)  # shape: batch_size x num label classes
 
         return padded_txt_input_ids, padded_umls_input_ids, label_ids
-
-
-def get_dataloader(dataset, batch_size, shuffle, collate_fn=Dataset.mimic_collate_fn, num_workers=8):
-    if isinstance(dataset, Dataset):
-        loader_func = data.DataLoader
-    elif isinstance(dataset, dgl.data.DGLDataset):
-        loader_func = GraphDataLoader
-    else:
-        raise NotImplementedError(f"Invalid DataLoader/Dataset Option!!!")
-    data_loader = loader_func(
-        dataset=dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        num_workers=num_workers,
-        collate_fn=collate_fn,
-        pin_memory=True,
-    )
-    if isinstance(dataset, dgl.data.DGLDataset):
-        # dim_nfeats is the embedding size in GNNDataset, gclasses == number of labels (50 or 8000+ for full)
-        graph_emb_size, num_label_classes = dataset.dim_nfeats, dataset.gclasses
-        return data_loader, graph_emb_size, num_label_classes
-    return data_loader
-
-
-def get_data(batch_size=8, dataset_class=Dataset, collate_fn=Dataset.mimic_collate_fn, reader=DataReader, **kwargs):
-    """
-    For DGLDataset, train/dev/test dataloader will be a tuple of dataloader, embedding_size, and num_label_classes
-
-    :param batch_size:
-    :type batch_size: int
-    :param dataset_class: Dataset or DGLDataset
-    :param collate_fn: Dataset.collate_fn or GNNDataset.collate_fn
-    :param reader: DataReader or GNNDataReader
-    :param kwargs: kwargs for DataReader/GNNDataReader Class
-    :return: datareader, train_data_loader, dev_data_loader, test_data_loader
-
-    """
-    dr = reader(**kwargs)
-    train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'), dr.mlb), batch_size, True, collate_fn)
-    dev_data_loader = get_dataloader(dataset_class(dr.get_dataset('dev'), dr.mlb), batch_size, False, collate_fn)
-    test_data_loader = get_dataloader(dataset_class(dr.get_dataset('test'), dr.mlb), batch_size, False, collate_fn)
-    return dr, train_data_loader, dev_data_loader, test_data_loader
 
 
 if __name__ == '__main__':
