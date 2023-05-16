@@ -85,7 +85,13 @@ def train(
                 tr_loss += labels_loss.item()
 
                 loss.backward()
-                nb_tr_examples += inputs[0].size(0)  # iputs is of list of 1 or 2 inputs
+                try:
+                    nb_tr_examples += inputs[0].size(0)  # inputs is of list of 1 or 2 inputs
+                except AttributeError:
+                    # DGLGraphs/batched graphs don't have .size attribute
+                    # for LAAT models, this exception will not occur
+                    # use inputs[0].batch_size instead OR the dimension[0] of labels_logits output tensor
+                    nb_tr_examples += labels_logits.size(0)
                 nb_tr_steps += 1
 
                 if grad_clip:

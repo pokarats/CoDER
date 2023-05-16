@@ -254,6 +254,7 @@ class GraphSAGE(nn.Module):
 
 
 if __name__ == '__main__':
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # load dummy dataset and dataloaders
     dummy_dr, dummy_tr, dummy_dev, dummy_test = get_data(batch_size=2,
                                                          dataset_class=GNNDataset,
@@ -271,12 +272,22 @@ if __name__ == '__main__':
 
     # Create the model with given dimensions
     model = GCNGraphClassification(de=dim_nfeats, u=256, da=256, L=num_label_classes, dropout=0.3)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=0.001, weight_decay=0)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(3):
-        for batch_i, (batched_graph, labels) in enumerate(tr_loader):
-            pred_logits, loss = model(batched_graph, labels)
+        for batch_i, batch in enumerate(tr_loader):
+            batch = tuple(tensor.to(device) for tensor in batch)
+            *inputs, labels = batch
+            pred_logits, loss = model(*inputs, labels)
             print(f"Epoch_batch: {epoch}_{batch_i} -- Pred:\n{pred_logits}")
+            print(f"num in batch: {pred_logits.size(0)}")
+            try:
+                print(f"num in batch_graph: {inputs[0].size(0)}")
+            except AttributeError:
+                print("To get DGLHeteroGraph batch size:\n")
+                print(f"num in batched graph: {inputs[0].batch_size}")
+
             print(f"Epoch_batch: {epoch}_{batch_i} -- Loss: {loss}")
             optimizer.zero_grad()
             loss.backward()
