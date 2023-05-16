@@ -445,12 +445,13 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
 
     """
 
-    dataset_class_attr = {k: kwargs.pop(k) for k in ["embedding_type", "mode", "self_loop"] if k in kwargs}
+    dataset_class_attr = {k: kwargs.pop(k) for k in ["embedding_type", "mode", "self_loop", "raw_dir"] if k in kwargs}
     if not dataset_class_attr:
         # in case attr dict is empty
         dataset_class_attr = {"embedding_type": None,
                               "mode": None,
-                              "self_loop": None}
+                              "self_loop": None,
+                              "raw_dir": None}
 
     # initialize datareader class after popping non-relevant keys
     dr = reader(**kwargs)

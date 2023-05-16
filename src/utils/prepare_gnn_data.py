@@ -6,6 +6,7 @@ from dgl.data.utils import save_graphs, save_info, load_graphs, load_info
 import os
 import itertools
 import numpy as np
+from pathlib import Path
 
 from src.utils.corpus_readers import ProcessedIterExtended, get_dataloader
 from src.utils.prepare_laat_data import DataReader, Dataset
@@ -115,7 +116,7 @@ class GNNDataset(dgl.data.DGLDataset):
                  mode="base",  # graph building mode, base vs <name_of_experiment>
                  self_loop=True,
                  raw_dir=f"{PROJ_FOLDER / 'data'}",
-                 save_dir=f"{PROJ_FOLDER / 'data' / 'gnn_data'}",  # save_path = os.path.join(save_dir, self.name)
+                 save_dir=None,  # save_path = os.path.join(save_dir, self.name)
                  force_reload=False,
                  verbose=False,
                  transform=None,
@@ -166,7 +167,7 @@ class GNNDataset(dgl.data.DGLDataset):
             name=name,
             hash_key=(name, embedding_type, mode, self_loop),
             raw_dir=raw_dir,
-            save_dir=save_dir,
+            save_dir=save_dir if save_dir is not None else f"{Path(raw_dir) / 'gnn_data'}",
             force_reload=force_reload,
             verbose=verbose,
             transform=transform,
