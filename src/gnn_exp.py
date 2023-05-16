@@ -67,7 +67,7 @@ def load_model(_log,
     else:
         dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size,
                                                                             GNNDataset,
-                                                                            GNNDataset.collate_fn,
+                                                                            GNNDataset.collate_gnn,
                                                                             GNNDataReader,
                                                                             **dr_params)
     train_data_loader, emb_size, num_labs = train_data_loader
