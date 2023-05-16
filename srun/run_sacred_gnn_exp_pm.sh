@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # SLURM environment arguments
+export DGLBACKEND=pytorch
 MYDATA=/netscratch/pokarats/ds
-IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_neptune2.sqsh
+IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_neptune2.sqsh_dgl_test.sqsh
 NUM_CPUS=16
 MEM="$2"GB
 
