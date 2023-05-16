@@ -34,8 +34,10 @@ class GCNGraphClassification(nn.Module):
         self.labels_output = nn.Linear(da, L, bias=True)
         self.labels_loss_fct = nn.BCEWithLogitsLoss()
 
-    def forward(self, g, in_feat, y=None):
+    def forward(self, g, y=None):
         # in_feat is the node embedding, each node represents CUI, so embedding size == 100 as in LAAT
+        # g is a graph_batch from GraphDataloader
+        g, in_feat = g, g.ndata["attr"]
         h = self.conv1(g, in_feat)
         h = F.relu(h)
         if self.dropout is not None:
@@ -273,7 +275,7 @@ if __name__ == '__main__':
 
     for epoch in range(3):
         for batch_i, (batched_graph, labels) in enumerate(tr_loader):
-            pred_logits, loss = model(batched_graph, batched_graph.ndata["attr"].float(), labels.float())
+            pred_logits, loss = model(batched_graph, labels)
             print(f"Epoch_batch: {epoch}_{batch_i} -- Pred:\n{pred_logits}")
             print(f"Epoch_batch: {epoch}_{batch_i} -- Loss: {loss}")
             optimizer.zero_grad()
