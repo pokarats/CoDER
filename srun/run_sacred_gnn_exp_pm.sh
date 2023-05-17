@@ -28,7 +28,7 @@ do
         --mail-type=END,FAIL \
         --mail-user=noon.pokaratsiri@dfki.de \
       srun/install_pretask.sh python src/gnn_exp.py with data_dir="$MYDATA" input_type=umls version="$ver" \
-      embedding_type=umls dr_params.prune_cui=True \
+      embedding_type="$embedding" dr_params.prune_cui=True \
       dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle dr_params.raw_dir="$MYDATA"
     else
       echo "$ver version u and da need to be 512"
@@ -44,7 +44,7 @@ do
         --mail-type=END,FAIL \
         --mail-user=noon.pokaratsiri@dfki.de \
       srun/install_pretask.sh python src/gnn_exp.py with data_dir="$MYDATA" input_type=umls version="$ver" \
-      embedding_type=umls dr_params.prune_cui=True \
+      embedding_type="$embedding" dr_params.prune_cui=True \
       dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle dr_params.raw_dir="$MYDATA" \
       gnn_params.u=512 gnn_params.da=512
     fi
