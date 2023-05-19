@@ -216,7 +216,7 @@ class GNNDataset(dgl.data.DGLDataset):
         )
 
     def _build_graph_edges(self, n_nodes, input_tokens):
-        if self.mode == "base":
+        if "base" in self.mode:
             # create dgl graph for each doc
             g = dgl.graph(([], []))
             g.add_nodes(n_nodes)
