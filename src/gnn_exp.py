@@ -34,6 +34,7 @@ from neptune.new.integrations.sacred import NeptuneObserver
 from sacred.observers import FileStorageObserver
 from sacred import Experiment
 import neptune.new as neptune
+from neptune.exceptions import NeptuneException
 
 SAVED_FOLDER = PROJ_FOLDER / f"scratch/.log/{date.today():%y_%m_%d}/{Path(__file__).stem}"
 
@@ -57,7 +58,8 @@ def load_model(_log,
                batch_size,
                dr_params,
                gnn_params):
-    _log.info(f"Loading pre_trained embedding weights from {embedding_path}")
+    _log.info(f"dr_params: {dr_params}")
+    _log.info(f"Pre_trained embedding weights from {embedding_path}")
     # embed_matrix = np.load(f"{embedding_path}")
     # w2v_weights_from_np = torch.Tensor(embed_matrix)
 
@@ -90,7 +92,7 @@ def load_model(_log,
         gnn_params = {"de": emb_size,
                       "L": num_labs,
                       **gnn_params}
-
+        _log.info(f"gnn_params: {gnn_params}")
         model = GCNGraphClassification(**gnn_params)
 
     return model, train_data_loader, dev_data_loader, test_data_loader
@@ -157,11 +159,14 @@ def gnn_cfg():
                          version=version,
                          input_type=input_type,
                          prune_cui=True,
-                         cui_prune_file=None,
+                         cui_prune_file=f"{version}_cuis_to_discard_{embedding_type}.pickle",
                          vocab_fn=f"processed_full_{input_type}_pruned.json",
                          max_seq_length=None,
                          doc_iterator=None,
-                         umls_iterator=None)
+                         umls_iterator=None,
+                         embedding_type=embedding_type,
+                         mode="gcn_base",
+                         verbose=True)
 
 
 @ex.named_config
@@ -198,10 +203,6 @@ def dummy_cfg():
     # unchanged from defaults
 
 
-def run_eval_pred():
-    pass
-
-
 @ex.main
 def run_gnn(embedding_path,
             cui_embedding_path,
@@ -223,12 +224,13 @@ def run_gnn(embedding_path,
                                                                              dr_params=dr_params,
                                                                              gnn_params=gnn_params)
     model = model.to(device)
-    print(model)
+    _log.info(f"loaded model info:\n{model}")
     version = dr_params["version"]
-    model_save_fname = f"filtered_{version}_{dr_params['input_type']}_{Path(embedding_path).stem}_GNN"
+    model_mode = dr_params.get('mode', 'non_gnn')
+    model_save_fname = f"filtered_{version}_{dr_params['input_type']}_{Path(embedding_path).stem}_{model_mode}"
 
     if not eval_only:
-        _log.info(f"{'=' * 10}GNN TRAINING STARTED{'=' * 10}")
+        _log.info(f"{'=' * 10}{model_mode.upper()} TRAINING STARTED{'=' * 10}")
         tr_ep_num, tr_f1_scores, tr_eval_data = zip(*train(train_data_loader,
                                                            dev_data_loader,
                                                            model,
@@ -240,7 +242,7 @@ def run_gnn(embedding_path,
                                                            grad_clip=grad_clip,
                                                            model_save_fname=model_save_fname))
 
-    _log.info(f"{'=' * 10}GNN EVALUATION STARTED{'=' * 10}")
+    _log.info(f"{'=' * 10}{model_mode.upper()} EVALUATION STARTED{'=' * 10}")
     saved_model_path = MODEL_FOLDER / f'best_{model_save_fname}.pt'
     _log.info(f"Loading best model state from {saved_model_path}")
     model.load_state_dict(torch.load(f"{saved_model_path}"))
@@ -270,11 +272,14 @@ def run_gnn(embedding_path,
 
     # generate predictions file for evaluation script
     exp_vers = Path(embedding_path).stem
-    predicted_fp = f"{MODEL_FOLDER / f'{version}_GNN_test_preds_{exp_vers}.txt'}"
+    predicted_fp = f"{MODEL_FOLDER / f'{version}_{model_mode.upper()}_test_preds_{exp_vers}.txt'}"
     generate_preds_file(test_eval_data["final_predicted"],
                         test_eval_data["doc_ids"],
                         preds_file=predicted_fp)
-    _run.add_artifact(predicted_fp, name="predicted_labels_file")
+    try:
+        _run.add_artifact(predicted_fp, name="predicted_labels_file.txt")
+    except NeptuneException as ne:
+        _log.exception(f"{ne} artifact was saved in {SAVED_FOLDER} but not on Neptune", stack_info=True)
 
     return dict(final_training_loss=final_tr_loss,
                 final_training_f1=final_tr_f1,

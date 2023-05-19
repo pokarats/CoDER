@@ -20,11 +20,15 @@ from collections import deque
 import dgl
 from dgl.dataloading import GraphDataLoader
 from torch.utils import data
+import logging
 
 if platform.python_version() < "3.8":
     import pickle5 as pickle
 else:
     import pickle
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseIter(ABC):
@@ -411,8 +415,10 @@ def get_dataloader(dataset, batch_size, shuffle, collate_fn, num_workers=8):
     """
     if isinstance(dataset, data.Dataset):
         loader_func = data.DataLoader
+        logger.info(f"using LAAT data.DataLoader for LAAT Dataset...")
     elif isinstance(dataset, dgl.data.DGLDataset):
         loader_func = GraphDataLoader
+        logger.info(f"using DGL GraphDataLoader for GNN Dataset...")
     else:
         raise NotImplementedError(f"Invalid DataLoader/Dataset Option!!!")
     data_loader = loader_func(
@@ -426,7 +432,11 @@ def get_dataloader(dataset, batch_size, shuffle, collate_fn, num_workers=8):
     if isinstance(dataset, dgl.data.DGLDataset):
         # dim_nfeats is the embedding size in GNNDataset, gclasses == number of labels (50 or 8000+ for full)
         graph_emb_size, num_label_classes = dataset.dim_nfeats, dataset.gclasses
+        logger.info(f"get_dataloader for DGLDataset returns: \n"
+                    f"data_loader, graph embedding size ({graph_emb_size}), and total num labels: {num_label_classes}")
         return data_loader, graph_emb_size, num_label_classes
+
+    logger.info(f"get_dataloader for LAAT Dataset returns data_loader only!")
     return data_loader
 
 
@@ -445,18 +455,22 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
 
     """
 
-    dataset_class_attr = {k: kwargs.pop(k) for k in ["embedding_type", "mode", "self_loop", "raw_dir"] if k in kwargs}
+    dataset_class_attr = {k: kwargs.pop(k) for k in ["embedding_type", "mode", "self_loop", "raw_dir", "verbose"]
+                          if k in kwargs}
     if not dataset_class_attr:
-        # in case attr dict is empty
-        dataset_class_attr = {"embedding_type": None,
-                              "mode": None,
-                              "self_loop": None,
-                              "raw_dir": None}
+        # in case attr dict is empty, then use default values
+        dataset_class_attr = {"embedding_type": None,  # default == snomedcase4
+                              "mode": None,  # default == 'base'
+                              "self_loop": None,  # default == True
+                              "raw_dir": None,  # default == PROJ_FOLDER / 'data'
+                              "verbose": False}  # default == False
+    logger.info(f"dataset_class_attr after updates: {dataset_class_attr}")
 
     # initialize datareader class after popping non-relevant keys
     dr = reader(**kwargs)
 
     if "laat_data" in str(dataset_class):
+        logger.info(f"dataset_class: {dataset_class}")
         train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'),
                                                          dr.mlb),
                                            batch_size,
@@ -473,6 +487,7 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
                                           False,
                                           collate_fn)
     elif "gnn_data" in str(dataset_class):
+        logger.info(f"dataset_class: {dataset_class}")
         train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'),
                                                          dr.mlb,
                                                          'train',
