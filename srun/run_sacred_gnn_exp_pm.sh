@@ -10,7 +10,7 @@ MEM="$2"GB
 # variables for srun and python
 for ver in 50 full
 do
-  for embedding in snomedcase4
+  for embedding in snomedbase snomedcase4 snomednoex
   do
     desc="$ver cui $embedding"
     echo "Submitting: $desc experiment"
