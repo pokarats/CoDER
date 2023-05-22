@@ -113,6 +113,7 @@ class GNNDataset(dgl.data.DGLDataset):
                  mlb,
                  name="train",
                  embedding_type="snomedcase4",
+                 version="full",
                  mode="base",  # graph building mode, base vs <name_of_experiment>
                  self_loop=True,
                  raw_dir=f"{PROJ_FOLDER / 'data'}",
@@ -125,6 +126,7 @@ class GNNDataset(dgl.data.DGLDataset):
         self._name = name  # MIMIC-III-CUI train/dev/test partition
         self.ds_name = "mimic3_cui"
         self.embedding_type = embedding_type if embedding_type is not None else "snomedcase4"
+        self.version = f"{version}"  # sacred commandline parser parses num as int, version needs to be str
         self.mode = mode if mode is not None else "base"
 
         self.data = dataset  # DataReader.get_dataset('<split: train/dev/test>')
@@ -165,9 +167,9 @@ class GNNDataset(dgl.data.DGLDataset):
 
         super().__init__(
             name=name,
-            hash_key=(name, embedding_type, mode, self_loop),
+            hash_key=(name, embedding_type, version, mode, self_loop),
             raw_dir=raw_dir,
-            save_dir=save_dir if save_dir is not None else f"{Path(raw_dir) / 'gnn_data'}",
+            save_dir=save_dir if save_dir is not None else f"{Path(raw_dir) / 'gnn_data' / str(version)}",
             force_reload=force_reload,
             verbose=verbose,
             transform=transform,
@@ -175,7 +177,7 @@ class GNNDataset(dgl.data.DGLDataset):
 
     @property
     def raw_path(self):
-        return os.path.join(self.raw_dir, "gnn_data")
+        return os.path.join(self.raw_dir, "gnn_data", self.version)
 
     def __len__(self):
         """Return the number of graphs in the dataset."""
@@ -266,7 +268,7 @@ class GNNDataset(dgl.data.DGLDataset):
 
         # create graph for each doc in cui doc iter
         for graph_i in range(self.N):
-            if (graph_i + 1) % 10 == 0 and self.verbose is True:
+            if (graph_i + 1) % 500 == 0 and self.verbose is True:
                 print(f"processing graph {graph_i + 1}...")
             doc_data = self.data[graph_i]
             doc_id, input_ids, input_tokens, glabel, n_nodes = doc_data

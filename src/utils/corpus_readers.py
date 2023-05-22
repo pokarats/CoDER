@@ -403,6 +403,7 @@ class MimicCuiSelectedTextIter(BaseIter):
 def get_dataloader(dataset, batch_size, shuffle, collate_fn, num_workers=8):
     """
 
+
     :param dataset: data.Dataset class for LAAT experiments or dgl.data.DGLDataset for GNN experiments with partitions
     specified
     :param batch_size:
@@ -411,7 +412,8 @@ def get_dataloader(dataset, batch_size, shuffle, collate_fn, num_workers=8):
     :param collate_fn: collate_fn for respective Dataset Class e.g. Dataset.mimic_collate_fn, DGLDataset.collate_fn etc
     :return: data_loader for the specified dataset partition for LAAT experimenmts, for DGLDataset a tuple of dataloader
     graph_embedding_size, number of label classes
-    :rtype:
+    :param num_workers: torch num_workers
+    :type num_workers: int
     """
     if isinstance(dataset, data.Dataset):
         loader_func = data.DataLoader
@@ -455,15 +457,20 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
 
     """
 
-    dataset_class_attr = {k: kwargs.pop(k) for k in ["embedding_type", "mode", "self_loop", "raw_dir", "verbose"]
+    dataset_class_attr = {k: kwargs.pop(k) for k in ["embedding_type", "mode", "self_loop", "raw_dir", "verbose",
+                                                     "force_reload"]
                           if k in kwargs}
+
     if not dataset_class_attr:
         # in case attr dict is empty, then use default values
         dataset_class_attr = {"embedding_type": None,  # default == snomedcase4
                               "mode": None,  # default == 'base'
                               "self_loop": None,  # default == True
                               "raw_dir": None,  # default == PROJ_FOLDER / 'data'
-                              "verbose": False}  # default == False
+                              "verbose": False,  # default == False
+                              "force_reload": False}  # default == False
+
+    dataset_class_attr["version"] = kwargs.get("version")  # this attr is also used in DataReader, do not pop
     logger.info(f"dataset_class_attr after updates: {dataset_class_attr}")
 
     # initialize datareader class after popping non-relevant keys
