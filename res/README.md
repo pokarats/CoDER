@@ -133,4 +133,19 @@ We experimented on with the case4 KGE as this is the best-performming KGE for th
 
 ### GNN
 
-WIP
+#### 2-layer GCN without Attention (GNN Baseline)
+
+Baseline 2-layer GCN model as encoder without the LAAT Attention mechanism. All hypermarameters remain the same as in 
+the baseline LAAT model.
+
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Base Top50  |   63.19   |   35.40   |   36.25    |   45.38    |    80.96    |    84.79    | 49.82 |
+| Case4 Top50 |   62.11   |   36.01   |   36.42    |   45.59    |    81.88    |    85.43    | 50.02 |
+| W2V Top50   |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+| Base Full   |   52.56   |   18.89   |    2.88    |   27.79    |    80.12    |    96.71    | 54.74 |
+| Case4 Full  |   53.40   |   19.19   |    2.88    |   28.24    |    80.96    |    96.86    | 55.72 |
+| W2V Full    |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+
+(Results from 5/22-24/2023 run on [Git Commit@ac47a9](https://github.com/pokarats/CoDER/commit/ac47a9da0124f4dcd6d155f634217a31bb685c91))
