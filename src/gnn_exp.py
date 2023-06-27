@@ -141,7 +141,9 @@ def gnn_cfg():
     # LAAT and GNN model params, n, de, L, pre_trained_weights defined in load_model captured function
     gnn_params = dict(u=256,
                       da=256,
-                      dropout=0.3)
+                      dropout=0.3,
+                      num_layers=2,
+                      readout='mean')
 
     # DataReader class params, first arg is batch_size
     if doc_iterator is not None:
