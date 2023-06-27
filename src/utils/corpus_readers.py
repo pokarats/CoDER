@@ -463,10 +463,10 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
 
     if not dataset_class_attr:
         # in case attr dict is empty, then use default values
-        dataset_class_attr = {"embedding_type": None,  # default == snomedcase4
-                              "mode": None,  # default == 'base'
-                              "self_loop": None,  # default == True
-                              "raw_dir": None,  # default == PROJ_FOLDER / 'data'
+        dataset_class_attr = {"embedding_type": "snomedcase4",  # default == snomedcase4
+                              "mode": 'base',  # -->  default == 'base'
+                              "self_loop": True,  # --> default == True
+                              # "raw_dir" if None --> default == PROJ_FOLDER / 'data'
                               "verbose": False,  # default == False
                               "force_reload": False}  # default == False
 
