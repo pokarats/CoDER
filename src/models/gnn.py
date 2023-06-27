@@ -24,13 +24,15 @@ class GCNGraphClassification(nn.Module):
 
     Added BCELogitsLoss func for when labels are provided, otherwise forward func only returns prediction logits
 
-    TODO: 1) add option to specity aggregator besides mean 2) batch norm? 3) integrate Label-Attention from LAAT?
+    TODO: 2) batch norm? 3) integrate Label-Attention from LAAT?
     """
-    def __init__(self, de, u, da, L, dropout=0.3):
+    def __init__(self, de, u, da, L, dropout=0.3, num_layers=2, readout='mean'):
         super(GCNGraphClassification, self).__init__()
         self.conv1 = dgl.nn.GraphConv(de, u)
         self.conv2 = dgl.nn.GraphConv(u, da)
         self.dropout = nn.Dropout(dropout)
+        self.num_layers = num_layers
+        self.readout = readout
         self.labels_output = nn.Linear(da, L, bias=True)
         self.labels_loss_fct = nn.BCEWithLogitsLoss()
 
@@ -42,11 +44,20 @@ class GCNGraphClassification(nn.Module):
         h = F.relu(h)
         if self.dropout is not None:
             h = self.dropout(h)
-        h = self.conv2(g, h)
+        if self.num_layers > 1:
+            # currently only supports upto 2 layers
+            # for  > 2-layer GCN --> need to update implementation wrt activation function, dropout etc.
+            for i in range(self.num_layers - 1):
+                h = self.conv2(g, h)
         g.ndata["h"] = h  # b x num nodes x h_feats
         # print(f"h.size, {h.size()}")
         # graph representation by averaging all the node representations.
-        hg = dgl.mean_nodes(g, "h")  # b x h_feats
+        if self.readout == 'mean':
+            hg = dgl.mean_nodes(g, "h")  # b x h_feats
+        elif self.readout == 'sum':
+            hg = dgl.sum_nodes(g, "h")  # bh x h_features
+        else:
+            raise NotImplementedError(f"{self.readout} readout function not supported: <mean> or <sum> only!!")
         # print(f"hg.size, {hg.size()}")
         labels_output = self.labels_output(hg)  # b x num_classes
         # print(f"output size: {labels_output.size()}")
@@ -271,11 +282,17 @@ if __name__ == '__main__':
     test_loader, _, _ = dummy_test
 
     # Create the model with given dimensions
-    model = GCNGraphClassification(de=dim_nfeats, u=256, da=256, L=num_label_classes, dropout=0.3)
+    model = GCNGraphClassification(de=dim_nfeats,
+                                   u=256,
+                                   da=256,
+                                   L=num_label_classes,
+                                   dropout=0.3,
+                                   num_layers=1,
+                                   readout='sum')
     optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=0.001, weight_decay=0)
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(3):
+    for epoch in range(2):
         for batch_i, batch in enumerate(tr_loader):
             batch = tuple(tensor.to(device) for tensor in batch)
             *inputs, labels = batch
@@ -286,6 +303,7 @@ if __name__ == '__main__':
                 print(f"num in batch_graph: {inputs[0].size(0)}")
             except AttributeError:
                 print("To get DGLHeteroGraph batch size:\n")
+                print(type(inputs[0]))
                 print(f"num in batched graph: {inputs[0].batch_size}")
 
             print(f"Epoch_batch: {epoch}_{batch_i} -- Loss: {loss}")
