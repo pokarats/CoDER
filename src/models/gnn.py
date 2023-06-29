@@ -36,11 +36,17 @@ class GCNGraphClassification(nn.Module):
         self.labels_output = nn.Linear(da, L, bias=True)
         self.labels_loss_fct = nn.BCEWithLogitsLoss()
 
-    def forward(self, g, y=None):
+    # GNNExplainer implementation in DGL mirror DGL source implementation of hte GraphConv forward func params
+    # need to have args for graph, features, and edge_weight
+    # the naming is inconsistent!!! :( featutre --> feat, edge_weight --> eweight
+    def forward(self, graph, y=None, feat=None, eweight=None):
         # in_feat is the node embedding, each node represents CUI, so embedding size == 100 as in LAAT
         # g is a graph_batch from GraphDataloader
-        g, in_feat = g, g.ndata["attr"]
-        h = self.conv1(g, in_feat)
+        if feat is not None:
+            in_feat = feat
+        else:
+            graph, in_feat = graph, graph.ndata["attr"]
+        h = self.conv1(graph, in_feat, weight=None, edge_weight=eweight)
         h = F.relu(h)
         if self.dropout is not None:
             h = self.dropout(h)
@@ -48,19 +54,24 @@ class GCNGraphClassification(nn.Module):
             # currently only supports upto 2 layers
             # for  > 2-layer GCN --> need to update implementation wrt activation function, dropout etc.
             for i in range(self.num_layers - 1):
-                h = self.conv2(g, h)
-        g.ndata["h"] = h  # b x num nodes x h_feats
+                h = self.conv2(graph, h, weight=None, edge_weight=eweight)
+        graph.ndata["h"] = h  # b x num nodes x h_feats
         # print(f"h.size, {h.size()}")
         # graph representation by averaging all the node representations.
         if self.readout == 'mean':
-            hg = dgl.mean_nodes(g, "h")  # b x h_feats
+            hg = dgl.mean_nodes(graph, "h")  # b x h_feats
         elif self.readout == 'sum':
-            hg = dgl.sum_nodes(g, "h")  # bh x h_features
+            hg = dgl.sum_nodes(graph, "h")  # bh x h_features
         else:
             raise NotImplementedError(f"{self.readout} readout function not supported: <mean> or <sum> only!!")
         # print(f"hg.size, {hg.size()}")
         labels_output = self.labels_output(hg)  # b x num_classes
         # print(f"output size: {labels_output.size()}")
+
+        if feat is not None:
+            # for GNNExplainer compatibility
+            return labels_output
+
         output = (labels_output,)
         if y is not None:
             # print("y size:", y.size())
