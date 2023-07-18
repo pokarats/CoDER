@@ -26,13 +26,16 @@ class GCNGraphClassification(nn.Module):
 
     TODO: 2) batch norm? 3) integrate Label-Attention from LAAT?
     """
-    def __init__(self, de, u, da, L, dropout=0.3, num_layers=2, readout='mean'):
+    def __init__(self, de, u, da, L, dropout=0.3, num_layers=2, readout='mean', with_attention=True):
         super(GCNGraphClassification, self).__init__()
         self.conv1 = dgl.nn.GraphConv(de, u)
         self.conv2 = dgl.nn.GraphConv(u, da)
         self.dropout = nn.Dropout(dropout)
         self.num_layers = num_layers
         self.readout = readout
+        self.with_attention = with_attention
+        self.W = nn.Linear(da, da, bias=False)  # intermediary params from LAAT
+        self.U = nn.Linear(da, L, bias=False)  # intermediary params from LAAT
         self.labels_output = nn.Linear(da, L, bias=True)
         self.labels_loss_fct = nn.BCEWithLogitsLoss()
 
@@ -56,16 +59,38 @@ class GCNGraphClassification(nn.Module):
             for i in range(self.num_layers - 1):
                 h = self.conv2(graph, h, weight=None, edge_weight=eweight)
         graph.ndata["h"] = h  # b x num nodes x h_feats
-        # print(f"h.size, {h.size()}")
+        print(f"h.size, {h.size()}")
         # graph representation by averaging all the node representations.
         if self.readout == 'mean':
             hg = dgl.mean_nodes(graph, "h")  # b x h_feats
+        # graph representation by summing all node representations
         elif self.readout == 'sum':
             hg = dgl.sum_nodes(graph, "h")  # bh x h_features
+        elif self.readout == 'attention':
+            pass
         else:
             raise NotImplementedError(f"{self.readout} readout function not supported: <mean> or <sum> only!!")
         # print(f"hg.size, {hg.size()}")
-        labels_output = self.labels_output(hg)  # b x num_classes
+
+        # LAAT Attention Mechanism
+        if self.with_attention:
+            # hg dim: b x da
+            Z = torch.tanh(self.W(hg))  # Z dim: b x da
+            A = torch.softmax(self.U(Z), 0)  # A dim: b x L
+            # print(f"sum row 0: {A.sum(0)}") --> sum to 1 for each col corresponding num label classes
+
+            # for bmm dim compatibility; i-th column of V is a rep of Doc (graph) regarding the i-th label in L
+            hg_unsqueezed = torch.unsqueeze(hg, dim=-1)  # b x da x 1
+            A_unsqueezed = torch.unsqueeze(A, dim=1)  # b x 1 x L
+            V = hg_unsqueezed.bmm(A_unsqueezed)  # b x da x L
+            # print(f"V dim: {V.size()}")
+
+            # LAAT implementation of attention layer weighted sum, bias added after summing
+            # resultant dim: b x L num_classes
+            labels_output = self.labels_output.weight.mul(V.transpose(1, 2)).sum(dim=2).add(self.labels_output.bias)
+        else:
+            labels_output = self.labels_output(hg)  # b x L num_classes
+
         # print(f"output size: {labels_output.size()}")
 
         if feat is not None:
@@ -298,8 +323,9 @@ if __name__ == '__main__':
                                    da=256,
                                    L=num_label_classes,
                                    dropout=0.3,
-                                   num_layers=1,
-                                   readout='sum')
+                                   num_layers=2,
+                                   readout='sum',
+                                   with_attention=True)
     optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=0.001, weight_decay=0)
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 

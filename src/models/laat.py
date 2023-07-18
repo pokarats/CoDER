@@ -114,6 +114,7 @@ class LAAT(nn.Module):
 
         Z = torch.tanh(self.W(H))  # b x n x da
         A = torch.softmax(self.U(Z), 1)  # b x n x L, softmax along dim=1 so that each col in L sums to 1!!
+        # print(f"sum A along dim 1: {A.sum(1)}")
         V = H.transpose(1, 2).bmm(A)  # b x 2u x L
 
         # LAAT implementation of attention layer weighted sum, bias added after summing
