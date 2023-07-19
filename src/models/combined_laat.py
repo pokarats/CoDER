@@ -92,6 +92,7 @@ class CombinedLAAT(LAAT):
                                                       padding_idx=pad_idx,
                                                       freeze=trainable) if cui_pre_trained_weights is not None else \
             nn.Embedding(n_cui, de, padding_idx=pad_idx)
+        self.cui_bilstm = nn.LSTM(input_size=de, hidden_size=u, bidirectional=True, batch_first=True, num_layers=1)
         self.aggregator = nn.Linear(4 * u, 2 * u, bias=True)
         self.init_aggregator()
 
@@ -119,14 +120,19 @@ class CombinedLAAT(LAAT):
 
         # hidden layers after bilstm for both cui and txt input types
         combined_H = []
-        for embedding_weights, input_tokens_ids, seq_lengths in zip([self.word_embed, self.cui_embed],
+        for idx, (embedding_weights, input_tokens_ids, seq_lengths) in enumerate(zip([self.word_embed, self.cui_embed],
                                                                     [x_txt, x_cui],
-                                                                    [txt_seq_lengths, cui_seq_lengths]):
+                                                                    [txt_seq_lengths, cui_seq_lengths])):
             embedded = embedding_weights(input_tokens_ids)  # b x txt/cui seq len x de
             embedded = self.dropout(embedded)  # per LAAT paper, dropout applied to embedding step
 
             embedded = nn.utils.rnn.pack_padded_sequence(embedded, seq_lengths, batch_first=True, enforce_sorted=False)
-            H, _ = self.bilstm(embedded, lstm_hidden)  # b x seq txt/cui n x 2u <-- dim of unpacked H
+            if idx > 0:
+                # cui input tokens, separate bilstm encoder
+                H, _ = self.cui_bilstm(embedded, lstm_hidden)  # b x cui n x 2u <-- dim of unpacked H
+            else:
+                # text input tokens, separate bilstm encoder
+                H, _ = self.bilstm(embedded, lstm_hidden)  # b x seq txt n x 2u <-- dim of unpacked H
             H, unpacked_lengths = nn.utils.rnn.pad_packed_sequence(H, batch_first=True)
             assert torch.equal(seq_lengths, unpacked_lengths)
             combined_H.append(H)
