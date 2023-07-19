@@ -24,20 +24,58 @@ class GCNGraphClassification(nn.Module):
 
     Added BCELogitsLoss func for when labels are provided, otherwise forward func only returns prediction logits
 
-    TODO: 2) batch norm? 3) integrate Label-Attention from LAAT?
     """
-    def __init__(self, de, u, da, L, dropout=0.3, num_layers=2, readout='mean', with_attention=True):
+    def __init__(self, de, u, da, L, dropout=0.3, num_layers=2, readout='mean'):
         super(GCNGraphClassification, self).__init__()
         self.conv1 = dgl.nn.GraphConv(de, u)
         self.conv2 = dgl.nn.GraphConv(u, da)
         self.dropout = nn.Dropout(dropout)
         self.num_layers = num_layers
-        self.readout = readout
-        self.with_attention = with_attention
+        self.readout = readout  # mean, sum, attention
         self.W = nn.Linear(da, da, bias=False)  # intermediary params from LAAT
         self.U = nn.Linear(da, L, bias=False)  # intermediary params from LAAT
         self.labels_output = nn.Linear(da, L, bias=True)
         self.labels_loss_fct = nn.BCEWithLogitsLoss()
+        self.init()  # LAAT initialization
+
+    @staticmethod
+    def _get_batch_node_idx(batch_num_nodes):
+        """
+        get list of node indices in dgl batch of graphs
+
+        :param batch_num_nodes: dgl.BatchGraph.batch_num_nodes()
+        :return: List of 1-D torch.LongTensors
+        :rtype: List
+        """
+        idx_list = []
+        for i in range(len(batch_num_nodes)):
+            if i == 0:
+                idx_list.append(torch.arange(int(batch_num_nodes[i])))
+            else:
+                start_idx = int(batch_num_nodes[i - 1])
+                end_idx = start_idx + int(batch_num_nodes[i])
+                idx_list.append(torch.arange(start_idx, end_idx))
+        return idx_list
+
+    def init(self, mean=0.0, std=0.03, xavier=False):
+        if xavier:
+            torch.nn.init.xavier_uniform_(self.W.weight)
+            torch.nn.init.xavier_uniform_(self.U.weight)
+            torch.nn.init.xavier_uniform_(self.labels_output.weight)
+            for name, param in self.bilstm.named_parameters():
+                if 'bias' in name:
+                    torch.nn.init.constant_(param, 0.0)
+                elif 'weight' in name:
+                    torch.nn.init.xavier_uniform_(param)
+        else:
+            # LAAT paper initialization
+            torch.nn.init.normal_(self.W.weight, mean, std)
+            if self.W.bias is not None:
+                self.W.bias.data.fill_(0)
+            torch.nn.init.normal_(self.U.weight, mean, std)
+            if self.U.bias is not None:
+                self.U.bias.data.fill_(0)
+            torch.nn.init.normal_(self.labels_output.weight, mean, std)
 
     # GNNExplainer implementation in DGL mirror DGL source implementation of hte GraphConv forward func params
     # need to have args for graph, features, and edge_weight
@@ -58,8 +96,8 @@ class GCNGraphClassification(nn.Module):
             # for  > 2-layer GCN --> need to update implementation wrt activation function, dropout etc.
             for i in range(self.num_layers - 1):
                 h = self.conv2(graph, h, weight=None, edge_weight=eweight)
-        graph.ndata["h"] = h  # b x num nodes x h_feats
-        print(f"h.size, {h.size()}")
+        graph.ndata["h"] = h  # num nodes x h_feats:da
+        # print(f"h.size, {h.size()}")
         # graph representation by averaging all the node representations.
         if self.readout == 'mean':
             hg = dgl.mean_nodes(graph, "h")  # b x h_feats
@@ -67,28 +105,27 @@ class GCNGraphClassification(nn.Module):
         elif self.readout == 'sum':
             hg = dgl.sum_nodes(graph, "h")  # bh x h_features
         elif self.readout == 'attention':
-            pass
-        else:
-            raise NotImplementedError(f"{self.readout} readout function not supported: <mean> or <sum> only!!")
-        # print(f"hg.size, {hg.size()}")
+            n_graphs = graph.batch_size
+            batch_num_objs = graph.batch_num_nodes()
+            seg_id = self._get_batch_node_idx(batch_num_objs)
+            hg = torch.nn.utils.rnn.pad_sequence([torch.index_select(h, 0, i) for i in seg_id], True)
+            # b x max num_nodes in batch x h_features dim:da
+            # print(f"hg size: {hg.shape}")
 
-        # LAAT Attention Mechanism
-        if self.with_attention:
-            # hg dim: b x da
-            Z = torch.tanh(self.W(hg))  # Z dim: b x da
-            A = torch.softmax(self.U(Z), 0)  # A dim: b x L
-            # print(f"sum row 0: {A.sum(0)}") --> sum to 1 for each col corresponding num label classes
-
-            # for bmm dim compatibility; i-th column of V is a rep of Doc (graph) regarding the i-th label in L
-            hg_unsqueezed = torch.unsqueeze(hg, dim=-1)  # b x da x 1
-            A_unsqueezed = torch.unsqueeze(A, dim=1)  # b x 1 x L
-            V = hg_unsqueezed.bmm(A_unsqueezed)  # b x da x L
+            # LAAT Attention Mechanism
+            Z = torch.tanh(self.W(hg))  # Z dim: b x num nodes x da
+            A = torch.softmax(self.U(Z), 1)  # A dim: b x num nodes x L
+            # print(f"sum row 0: {A.sum(1)}")  # --> sum to 1 for each col corresponding num label classes
+            V = hg.transpose(1, 2).bmm(A)  # b x da x L
             # print(f"V dim: {V.size()}")
-
             # LAAT implementation of attention layer weighted sum, bias added after summing
             # resultant dim: b x L num_classes
             labels_output = self.labels_output.weight.mul(V.transpose(1, 2)).sum(dim=2).add(self.labels_output.bias)
         else:
+            raise NotImplementedError(f"{self.readout} readout function not supported: <mean> or <sum> only!!")
+        # print(f"hg.size, {hg.size()}")
+
+        if self.readout != 'attention':
             labels_output = self.labels_output(hg)  # b x L num_classes
 
         # print(f"output size: {labels_output.size()}")
@@ -324,8 +361,7 @@ if __name__ == '__main__':
                                    L=num_label_classes,
                                    dropout=0.3,
                                    num_layers=2,
-                                   readout='sum',
-                                   with_attention=True)
+                                   readout='attention')
     optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=0.001, weight_decay=0)
     # optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
