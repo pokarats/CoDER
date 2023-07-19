@@ -32,7 +32,7 @@ class GCNGraphClassification(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.num_layers = num_layers
         self.readout = readout  # mean, sum, attention
-        self.W = nn.Linear(da, da, bias=False)  # intermediary params from LAAT
+        # self.W = nn.Linear(da, da, bias=False)  # intermediary params from LAAT
         self.U = nn.Linear(da, L, bias=False)  # intermediary params from LAAT
         self.labels_output = nn.Linear(da, L, bias=True)
         self.labels_loss_fct = nn.BCEWithLogitsLoss()
@@ -59,19 +59,14 @@ class GCNGraphClassification(nn.Module):
 
     def init(self, mean=0.0, std=0.03, xavier=False):
         if xavier:
-            torch.nn.init.xavier_uniform_(self.W.weight)
+            # torch.nn.init.xavier_uniform_(self.W.weight)
             torch.nn.init.xavier_uniform_(self.U.weight)
             torch.nn.init.xavier_uniform_(self.labels_output.weight)
-            for name, param in self.bilstm.named_parameters():
-                if 'bias' in name:
-                    torch.nn.init.constant_(param, 0.0)
-                elif 'weight' in name:
-                    torch.nn.init.xavier_uniform_(param)
         else:
             # LAAT paper initialization
-            torch.nn.init.normal_(self.W.weight, mean, std)
-            if self.W.bias is not None:
-                self.W.bias.data.fill_(0)
+            # torch.nn.init.normal_(self.W.weight, mean, std)
+            # if self.W.bias is not None:
+                # self.W.bias.data.fill_(0)
             torch.nn.init.normal_(self.U.weight, mean, std)
             if self.U.bias is not None:
                 self.U.bias.data.fill_(0)
@@ -117,8 +112,8 @@ class GCNGraphClassification(nn.Module):
             # print(f"hg size: {hg.shape}")
 
             # LAAT Attention Mechanism
-            Z = torch.tanh(self.W(hg))  # Z dim: b x num nodes x da
-            A = torch.softmax(self.U(Z), 1)  # A dim: b x num nodes x L
+            # Z = torch.tanh(self.W(hg))  # Z dim: b x num nodes x da
+            A = torch.softmax(self.U(hg), 1)  # A dim: b x num nodes x L
             # print(f"sum row 0: {A.sum(1)}")  # --> sum to 1 for each col corresponding num label classes
             V = hg.transpose(1, 2).bmm(A)  # b x da x L
             # print(f"V dim: {V.size()}")
