@@ -108,6 +108,10 @@ class GCNGraphClassification(nn.Module):
             n_graphs = graph.batch_size
             batch_num_objs = graph.batch_num_nodes()
             seg_id = self._get_batch_node_idx(batch_num_objs)
+            seg_id = [each_idx_tensor.to(h.device) for each_idx_tensor in seg_id]
+            # tensor idx needs to be on same device as tensor to index_select on GPU
+            # print(f"h device: {h.device}")
+            # print(f"seg id tensor 0 device: {seg_id[0].device}")
             hg = torch.nn.utils.rnn.pad_sequence([torch.index_select(h, 0, i) for i in seg_id], True)
             # b x max num_nodes in batch x h_features dim:da
             # print(f"hg size: {hg.shape}")
