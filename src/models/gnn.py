@@ -91,8 +91,8 @@ class GCNGraphClassification(nn.Module):
             # for  > 2-layer GCN --> need to update implementation wrt activation function, dropout etc.
             for i in range(self.num_layers - 1):
                 h = self.conv2(graph, h, weight=None, edge_weight=eweight)
-        graph.ndata["h"] = h  # num nodes x h_feats:da
-        # print(f"h.size, {h.size()}")
+        graph.ndata["h"] = h  # num_nodes? x h_feats:da
+        print(f"h.size, {h.size()}")
         # graph representation by averaging all the node representations.
         if self.readout == 'mean':
             hg = dgl.mean_nodes(graph, "h")  # b x h_feats
@@ -110,7 +110,10 @@ class GCNGraphClassification(nn.Module):
             hg = torch.nn.utils.rnn.pad_sequence([torch.index_select(h, 0, i) for i in seg_id], True)
             # b x max num_nodes in batch x h_features dim:da
             # print(f"hg size: {hg.shape}")
-
+            dgl_sum = dgl.sum_nodes(graph, 'h')
+            print(f"dgl sum: {dgl_sum}\nshape: {dgl_sum.shape}")
+            my_sum = torch.sum(hg, dim=1)
+            print(f"my sum: {my_sum}\nshape: {my_sum.shape}")
             # LAAT Attention Mechanism
             # Z = torch.tanh(self.W(hg))  # Z dim: b x num nodes x da
             A = torch.softmax(self.U(hg), 1)  # A dim: b x num nodes x L
@@ -345,6 +348,7 @@ if __name__ == '__main__':
                                                          reader=GNNDataReader,
                                                          data_dir=DATA_DIR,
                                                          version="dummy",
+                                                         mode="base_kg_rel",
                                                          input_type="umls",
                                                          prune_cui=True,
                                                          cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",
