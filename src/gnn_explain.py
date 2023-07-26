@@ -2,18 +2,13 @@
 Adapted from examples from https://docs.dgl.ai/en/0.8.x/generated/dgl.nn.pytorch.explain.GNNExplainer.html
 """
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import dgl
 from dgl.nn.pytorch import GNNExplainer
-from dgl.nn.pytorch.conv import GINConv
-from dgl.nn.pytorch.glob import SumPooling
-from dgl.dataloading import DataLoader, MultiLayerFullNeighborSampler
 from utils.config import PROJ_FOLDER
 from utils.corpus_readers import get_data
 from utils.prepare_gnn_data import GNNDataReader, GNNDataset
 from models.gnn import GCNGraphClassification
-from tqdm import tqdm
+
 
 DATA_DIR = f"{PROJ_FOLDER / 'data' / 'mimic3'}"
 
@@ -27,6 +22,7 @@ if __name__ == '__main__':
                                                          reader=GNNDataReader,
                                                          data_dir=DATA_DIR,
                                                          version="dummy",
+                                                         mode="base_kg_rel",
                                                          input_type="umls",
                                                          prune_cui=True,
                                                          cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",
@@ -35,7 +31,7 @@ if __name__ == '__main__':
     dev_loader, _, _ = dummy_dev
     test_loader, _, _ = dummy_test
 
-    sample_g, sample_labels = dev_loader.dataset[0]
+    sample_g, sample_labels, gnidx_to_cui = dev_loader.dataset[0]
     print(sample_g)
     print(sample_labels)
 
@@ -81,5 +77,7 @@ if __name__ == '__main__':
     print(edge_mask)
     """
     edge_mask is a tensor of dim==number of edges,
+    np.where[edge_mask > condition e.g. 0.7][0] --> array idx of edges with scores > condition
     the i-th idx is an EID, which with g.find_edges(EID or [EIDs]) will give src, dst node ids
     """
+

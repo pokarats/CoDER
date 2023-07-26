@@ -1,7 +1,6 @@
 import networkx
 import torch
 import dgl
-from dgl.dataloading import GraphDataLoader
 from dgl.data.utils import save_graphs, save_info, load_graphs, load_info
 import os
 import itertools
@@ -135,10 +134,13 @@ class GNNDataset(dgl.data.DGLDataset):
 
         self.cui2tui = dict()  # mapping cui to tui from semantic_info.csv <--\t separated, col 2
         self.cui2sg = dict()  # mapping cui to semantic group from semantic_info.csv <-- \t separated col 4
+        if "kg_rel" in mode:
+            self.cui2cui = dict()  # mapping src_cui to dst_cui where a non inverse_isa rel exists between them
 
         self.self_loop = self_loop if self_loop is not None else True
         self.graphs = []
         self.labels = []
+        self.gnidx_cuis = []  # this will be saved with info_dict
 
         # label dict mapping idx to labels?
         self.glabel_dict = {}  # mapping of mlb.classes_ idx to original labels, classes_ global across train/test/dev
@@ -187,7 +189,7 @@ class GNNDataset(dgl.data.DGLDataset):
         """Get the idx-th sample.
                 Parameters
                 ---------
-                idx : int
+                index : int
                     The sample index.
                 Returns
                 -------
@@ -198,7 +200,7 @@ class GNNDataset(dgl.data.DGLDataset):
             g = self.graphs[index]
         else:
             g = self._transform(self.graphs[index])
-        return g, self.labels[index]
+        return g, self.labels[index], self.gnidx_cuis[index]
         # doc_id, input_ids, labels_bin = self.data[index]
         # return input_ids, labels_bin
 
@@ -208,6 +210,16 @@ class GNNDataset(dgl.data.DGLDataset):
             "umls",
             "semantic_info.csv"
         )
+
+    def _kg_file_path(self):
+        cui_version_to_dir_mapping = {"snomedcase4": "case4",
+                                         "snomedbase": "umls",
+                                         "snomednoex": "umls_noex"}
+        cui_embedding_dir = cui_version_to_dir_mapping.get(self.embedding_type, "case4")
+        return os.path.join(self.raw_dir,
+                            cui_embedding_dir,
+                            "all.txt"
+                            )
 
     def _emb_file_path(self):
         return os.path.join(
@@ -230,12 +242,20 @@ class GNNDataset(dgl.data.DGLDataset):
             else:
                 # permute doesn't include self element
                 groupby_iterable = itertools.permutations(range(n_nodes), r=2)
-            for src_dst_pair in groupby_iterable:
-                src_idx, dst_idx = src_dst_pair
-                src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
-                if self.cui2tui[src_cui] == self.cui2tui[dst_cui]:
-                    m_edges += 1
-                    g.add_edges(src_idx, dst_idx)
+            if "kg_rel" in self.mode:
+                for src_dst_pair in groupby_iterable:
+                    src_idx, dst_idx = src_dst_pair
+                    src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
+                    if dst_cui in self.cui2cui.get(src_cui, []) or (src_idx == dst_idx):
+                        m_edges += 1
+                        g.add_edges(src_idx, dst_idx)
+            else:
+                for src_dst_pair in groupby_iterable:
+                    src_idx, dst_idx = src_dst_pair
+                    src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
+                    if self.cui2tui[src_cui] == self.cui2tui[dst_cui]:
+                        m_edges += 1
+                        g.add_edges(src_idx, dst_idx)
             return g, m_edges
         else:
             raise NotImplementedError(f"{self.mode} method has not been implemented!!")
@@ -252,6 +272,8 @@ class GNNDataset(dgl.data.DGLDataset):
         sem_file = self._sem_file_path()
         sem_info_iter = ProcessedIterExtended(sem_file, header=True, delimiter="\t")
 
+
+
         # load saved embeddings, e.g. KGE .npy file
         cui_ptr_embeddings = np.load(self._emb_file_path())
 
@@ -261,6 +283,22 @@ class GNNDataset(dgl.data.DGLDataset):
             cui, tui, sg = row[1], row[2], row[4]
             self.cui2tui[cui] = tui
             self.cui2sg[cui] = sg
+
+        # get kg rel info for cui
+        if "kg_rel" in self.mode:
+            kg_rel_file = self._kg_file_path()
+            kg_rel_iter = ProcessedIterExtended(kg_rel_file, header=False, delimiter="\t")
+            if self.verbose:
+                print(f"Processing KG relations from {kg_rel_file}...")
+            for row in kg_rel_iter:
+                # mapping a cui to other cui with any relation in kg except negation (inverse_isa)
+                # one cui may be connected to many cui's through different relations
+                src_cui, rel, dst_cui = row
+                if rel != "inverse_isa":
+                    try:
+                        self.cui2cui[src_cui].append(dst_cui)
+                    except KeyError:
+                        self.cui2cui[src_cui] = [dst_cui]
 
         # convert dataset.mlb.classes_ to self.glabel_dict mapping idx to actual label classes
         # dataset.mlb.classes_ is an ndarray mapping idx to actual label classes
@@ -286,6 +324,7 @@ class GNNDataset(dgl.data.DGLDataset):
             # store node features/embeddings if any
             nlabels = []  # node labels; none for now, can store sem types? sem group? whether cui in icd9 sem type?
             nattrs = []  # node attributes if it has
+            nidx_to_cui = dict()  # mapping graph g's node_idx (0-indexed) to cui
             for node_j in range(n_nodes):
                 embd_row_idx = input_ids[node_j]
                 nattrs.append(cui_ptr_embeddings[embd_row_idx])
@@ -296,6 +335,7 @@ class GNNDataset(dgl.data.DGLDataset):
                 # this is optional and TODO: this to be refactored as well
                 node_cui = input_tokens[node_j]
                 node_sg = self.cui2sg[node_cui]
+                nidx_to_cui[node_j] = node_cui
                 if node_sg not in self.nlabel_dict:
                     mapped = len(self.nlabel_dict)
                     self.nlabel_dict[node_sg] = mapped
@@ -320,8 +360,10 @@ class GNNDataset(dgl.data.DGLDataset):
             self.m += m_edges
 
             self.graphs.append(g)
-
-            # analyze for num. subgraphs in each document
+            # store node idx to cui mapping for each graph
+            # self.gnidx_cuis list order correspond to graph order
+            self.gnidx_cuis.append(nidx_to_cui)  # this is retrievable when __getitem__ is called on the class
+            # analyze for num subgraphs in each document
             self.cc_dict[graph_i] = self._get_subgraphs(g)
             self.cc += len(self.cc_dict[graph_i])
 
@@ -365,6 +407,7 @@ class GNNDataset(dgl.data.DGLDataset):
         )
         label_dict = {"labels": self.labels}
         info_dict = {
+            "gnidx_cui": self.gnidx_cuis,
             "N": self.N,
             "n": self.n,
             "m": self.m,
@@ -397,6 +440,7 @@ class GNNDataset(dgl.data.DGLDataset):
 
         self.graphs = graphs
         self.labels = label_dict["labels"]
+        self.gnidx_cuis = info_dict["gnidx_cui"]
 
         self.N = info_dict["N"]
         self.n = info_dict["n"]
@@ -433,9 +477,9 @@ class GNNDataset(dgl.data.DGLDataset):
 
     @staticmethod
     def collate_gnn(samples):
-        # The input `samples` is a list of pairs
-        #  (graph, label).
-        graphs, labels = list(zip(*samples))
+        # The input `samples` is a list of tuples
+        #  (graph, label, dict mapping node idx to cui).
+        graphs, labels, _ = list(zip(*samples))
         batched_graph = dgl.batch(graphs)
 
         # concat labels Tensors in self.labels to be of shape num doc * num label classes
