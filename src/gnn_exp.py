@@ -26,7 +26,7 @@ if platform.system() != 'Darwin':
 
 from models.gnn import GCNGraphClassification
 from models.train_eval_laat import train, evaluate, generate_preds_file
-from utils.prepare_gnn_data import GNNDataReader, GNNDataset, GraphDataLoader
+from utils.prepare_gnn_data import GNNDataReader, GNNDataset
 from src.utils.corpus_readers import get_data, MimicCuiSelectedTextIter
 from utils.config import PROJ_FOLDER, MODEL_FOLDER, DEV_API_KEY
 from utils.eval import all_metrics
