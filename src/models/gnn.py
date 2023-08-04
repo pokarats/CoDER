@@ -93,7 +93,7 @@ class GCNGraphClassification(nn.Module):
             for i in range(self.num_layers - 1):
                 h = self.conv2(graph, h, weight=None, edge_weight=eweight)
         graph.ndata["h"] = h  # num_nodes? x h_feats:da
-        print(f"h.size, {h.size()}")
+        # print(f"h.size, {h.size()}")
         # graph representation by averaging all the node representations.
         if self.readout == 'mean':
             hg = dgl.mean_nodes(graph, "h")  # b x h_feats
