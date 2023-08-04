@@ -474,6 +474,7 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
     logger.info(f"dataset_class_attr after updates: {dataset_class_attr}")
 
     # initialize datareader class after popping non-relevant keys
+    logger.info(f"kwargs for DataReader from dr_params: {kwargs}")
     dr = reader(**kwargs)
 
     if "laat_data" in str(dataset_class):

@@ -224,12 +224,29 @@ class GNNDataset(dgl.data.DGLDataset):
                             )
 
     def _emb_file_path(self):
+        """
+        Options for self.embedding_type: snomedcase4, snomedbase, snomednoex, umls(W2V)
+        """
         return os.path.join(
             self.raw_dir,
             "linked_data",
             "model",
             f"processed_full_{self.embedding_type}_pruned.npy"
         )
+
+    def _build_cui2cui_kg_rel_dict(self):
+        kg_rel_file = self._kg_file_path()
+        kg_rel_iter = ProcessedIterExtended(kg_rel_file, header=False, delimiter="\t")
+        if self.verbose:
+            print(f"Processing KG relations from {kg_rel_file}...")
+        for row in kg_rel_iter:
+            # mapping a cui to other cui with any relation in kg including reciprocal ones (inverse_isa)
+            # one cui may be connected to many cui's through different relations
+            src_cui, rel, dst_cui = row
+            try:
+                self.cui2cui[src_cui].append(dst_cui)
+            except KeyError:
+                self.cui2cui[src_cui] = [dst_cui]
 
     def _build_graph_edges(self, n_nodes, input_tokens):
         if "base" in self.mode:
@@ -288,18 +305,7 @@ class GNNDataset(dgl.data.DGLDataset):
 
         # get kg rel info for cui
         if "kg_rel" in self.mode:
-            kg_rel_file = self._kg_file_path()
-            kg_rel_iter = ProcessedIterExtended(kg_rel_file, header=False, delimiter="\t")
-            if self.verbose:
-                print(f"Processing KG relations from {kg_rel_file}...")
-            for row in kg_rel_iter:
-                # mapping a cui to other cui with any relation in kg including reciprocal ones (inverse_isa)
-                # one cui may be connected to many cui's through different relations
-                src_cui, rel, dst_cui = row
-                try:
-                    self.cui2cui[src_cui].append(dst_cui)
-                except KeyError:
-                    self.cui2cui[src_cui] = [dst_cui]
+            self._build_cui2cui_kg_rel_dict()
 
         # convert dataset.mlb.classes_ to self.glabel_dict mapping idx to actual label classes
         # dataset.mlb.classes_ is an ndarray mapping idx to actual label classes
