@@ -167,6 +167,7 @@ def gnn_cfg():
                          doc_iterator=None,
                          umls_iterator=None,
                          embedding_type=embedding_type,
+                         threshold=0.83,
                          mode="gcn_base",
                          verbose=True)
 
