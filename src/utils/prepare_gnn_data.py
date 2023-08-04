@@ -34,7 +34,8 @@ class GNNDataReader(DataReader):
                  max_seq_length=None,
                  doc_iterator=None,
                  umls_iterator=None,
-                 second_txt_vocab_fn=None):
+                 second_txt_vocab_fn=None,
+                 threshold=0.7):
         super().__init__(data_dir=data_dir,
                          version=version,
                          input_type=input_type,
@@ -44,7 +45,8 @@ class GNNDataReader(DataReader):
                          max_seq_length=max_seq_length,
                          doc_iterator=doc_iterator,
                          umls_iterator=umls_iterator,
-                         second_txt_vocab_fn=second_txt_vocab_fn)
+                         second_txt_vocab_fn=second_txt_vocab_fn,
+                         threshold=threshold)
         self.doc2len = dict()
 
     def _fit_transform(self, split):
@@ -54,7 +56,7 @@ class GNNDataReader(DataReader):
             raise NotImplementedError(f"Invalud input_type: only CUI input is supported!")
         elif "umls" in self.input_type:
             umls_doc_iter = self.umls_doc_iterator(self.umls_doc_split_path[split],
-                                                   threshold=0.7,
+                                                   threshold=self.confidence_threshold,
                                                    pruned=self.prune_cui,
                                                    discard_cuis_file=self.cui_prune_file)
             text_id_iter = self.doc_iterator(self.doc_split_path[split], slice_pos=0)

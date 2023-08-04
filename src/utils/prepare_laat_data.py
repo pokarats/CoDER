@@ -88,7 +88,8 @@ class DataReader:
                  max_seq_length=4000,
                  doc_iterator=None,
                  umls_iterator=None,
-                 second_txt_vocab_fn=None):
+                 second_txt_vocab_fn=None,
+                 threshold=0.7):  # default used to be 0.7, from empirical observation 0.83 should lower noise
         """
 
         :param data_dir:
@@ -113,6 +114,8 @@ class DataReader:
         :param second_txt_vocab_fn: only for combined input_type, txt w2v .json vocab mapping str to id file name
         (NOT path)
         :type second_txt_vocab_fn: str
+        :param threshold: confidence threshold for umls_iterator
+        :type threshold: float
         """
         self.data_dir = Path(data_dir) / f"{version}"
         self.linked_data_dir = self.data_dir.parent.parent / "linked_data" / f"{version}" \
@@ -186,6 +189,7 @@ class DataReader:
             with open(f"{vocab_fname}") as js_file:
                 self.featurizer = Features(json.load(js_file))
         self.max_seq_length = max_seq_length
+        self.confidence_threshold = threshold
 
         # store doc_id to labels and split stats: min, max, mean num tokens/doc
         self.doc2labels = dict()
@@ -208,7 +212,7 @@ class DataReader:
 
         elif "umls" in self.input_type:
             umls_doc_iter = self.umls_doc_iterator(self.umls_doc_split_path[split],
-                                                   threshold=0.7,
+                                                   threshold=self.confidence_threshold,
                                                    pruned=self.prune_cui,
                                                    discard_cuis_file=self.cui_prune_file)
             text_id_iter = self.doc_iterator(self.doc_split_path[split], slice_pos=0)
@@ -221,7 +225,7 @@ class DataReader:
                 yield doc_id, input_ids, self.mlb.transform([doc_labels])
         elif self.input_type == "combined":
             umls_doc_iter = self.umls_doc_iterator(self.umls_doc_split_path[split],
-                                                   threshold=0.7,
+                                                   threshold=self.confidence_threshold,
                                                    pruned=self.prune_cui,
                                                    discard_cuis_file=self.cui_prune_file)
             text_doc_iter = self.doc_iterator(self.doc_split_path[split])
@@ -260,12 +264,14 @@ class DataReader:
         elif "umls" in self.input_type:
             doc_lens = list(map(int, [doc_data[2] for doc_data in
                                       self.umls_doc_iterator(self.umls_doc_split_path[split],
+                                                             threshold=self.confidence_threshold,
                                                              pruned=self.prune_cui,
                                                              discard_cuis_file=self.cui_prune_file)]))
         elif self.input_type == "combined":
             txt_doc_lens = list(map(int, self.doc_iterator(self.doc_split_path[split], slice_pos=4)))
             umls_doc_lens = list(map(int, [doc_data[2] for doc_data in
                                            self.umls_doc_iterator(self.umls_doc_split_path[split],
+                                                                  threshold=self.confidence_threshold,
                                                                   pruned=self.prune_cui,
                                                                   discard_cuis_file=self.cui_prune_file)]))
         else:

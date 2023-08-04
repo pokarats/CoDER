@@ -358,7 +358,8 @@ if __name__ == '__main__':
                                                          input_type="umls",
                                                          prune_cui=True,
                                                          cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",
-                                                         vocab_fn="processed_full_umls_pruned.json")
+                                                         vocab_fn="processed_full_umls_pruned.json",
+                                                         threshold=0.83)
     tr_loader, dim_nfeats, num_label_classes = dummy_tr
     dev_loader, _, _ = dummy_dev
     test_loader, _, _ = dummy_test
