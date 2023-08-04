@@ -138,6 +138,8 @@ We experimented on with the case4 KGE as this is the best-performming KGE for th
 Baseline 2-layer GCN model as encoder without the LAAT Attention mechanism. All hypermarameters remain the same as in 
 the baseline LAAT model.
 
+Graph Construction Method: CUIs connected if they belong to the same TUI
+
 
 | Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
 |-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
@@ -149,3 +151,30 @@ the baseline LAAT model.
 | W2V Full    |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
 
 (Results from 5/22-24/2023 run on [Git Commit@ac47a9](https://github.com/pokarats/CoDER/commit/ac47a9da0124f4dcd6d155f634217a31bb685c91))
+
+#### 2-layer GCN without Attention (GNN KGE Baseline)
+
+Same as the basic GNN approach above, but baseline graph construction utilizes KGE relation information.
+CUIs are connected if they have a relation between them in the KG.
+
+##### 'mean' aggregator readout
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Base Top50  |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+| Case4 Top50 |   70.00   |   35.24   |   37.78    |   46.88    |    84.24    |    87.17    | 53.15 |
+| W2V Top50   |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+| Base Full   |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+| Case4 Full  |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+| W2V Full    |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+
+##### 'sum' aggregator readout
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Base Top50  |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+| Case4 Top50 |   66.49   |   44.69   |   47.28    |   53.45    |    84.79    |    87.34    | 55.30 |
+| W2V Top50   |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+| Base Full   |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+| Case4 Full  |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+| W2V Full    |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
