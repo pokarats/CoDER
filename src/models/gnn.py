@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import dgl
+from dgl.ops.segment import segment_mm
 from dgl.nn.pytorch.conv import GINConv
 from dgl.nn.pytorch.glob import SumPooling
 from dgl.dataloading import DataLoader, MultiLayerFullNeighborSampler
@@ -110,10 +111,15 @@ class GCNGraphClassification(nn.Module):
             hg = torch.nn.utils.rnn.pad_sequence([torch.index_select(h, 0, i) for i in seg_id], True)
             # b x max num_nodes in batch x h_features dim:da
             # print(f"hg size: {hg.shape}")
+            """
+            These lines here are testing that my implementation is equivalent to the built-in segment operations
+            e.g. for summing
             dgl_sum = dgl.sum_nodes(graph, 'h')
             print(f"dgl sum: {dgl_sum}\nshape: {dgl_sum.shape}")
             my_sum = torch.sum(hg, dim=1)
             print(f"my sum: {my_sum}\nshape: {my_sum.shape}")
+            """
+
             # LAAT Attention Mechanism
             # Z = torch.tanh(self.W(hg))  # Z dim: b x num nodes x da
             A = torch.softmax(self.U(hg), 1)  # A dim: b x num nodes x L

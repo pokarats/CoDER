@@ -291,14 +291,13 @@ class GNNDataset(dgl.data.DGLDataset):
             if self.verbose:
                 print(f"Processing KG relations from {kg_rel_file}...")
             for row in kg_rel_iter:
-                # mapping a cui to other cui with any relation in kg except negation (inverse_isa)
+                # mapping a cui to other cui with any relation in kg including reciprocal ones (inverse_isa)
                 # one cui may be connected to many cui's through different relations
                 src_cui, rel, dst_cui = row
-                if rel != "inverse_isa":
-                    try:
-                        self.cui2cui[src_cui].append(dst_cui)
-                    except KeyError:
-                        self.cui2cui[src_cui] = [dst_cui]
+                try:
+                    self.cui2cui[src_cui].append(dst_cui)
+                except KeyError:
+                    self.cui2cui[src_cui] = [dst_cui]
 
         # convert dataset.mlb.classes_ to self.glabel_dict mapping idx to actual label classes
         # dataset.mlb.classes_ is an ndarray mapping idx to actual label classes
@@ -330,16 +329,16 @@ class GNNDataset(dgl.data.DGLDataset):
                 nattrs.append(cui_ptr_embeddings[embd_row_idx])
 
                 # relabel nodes if it has labels
-                # if it doesn't have node labels, then every node's label is its cui semantic group
+                # if it doesn't have node labels, then every node's label is its cui semantic tui
                 # relabel to indexed 0 to number of semantic group in the dataset - 1
                 # this is optional and TODO: this to be refactored as well
                 node_cui = input_tokens[node_j]
-                node_sg = self.cui2sg[node_cui]
+                node_tui = self.cui2tui[node_cui]
                 nidx_to_cui[node_j] = node_cui
-                if node_sg not in self.nlabel_dict:
+                if node_tui not in self.nlabel_dict:
                     mapped = len(self.nlabel_dict)
-                    self.nlabel_dict[node_sg] = mapped
-                nlabels.append(self.nlabel_dict[node_sg])
+                    self.nlabel_dict[node_tui] = mapped
+                nlabels.append(self.nlabel_dict[node_tui])
 
             # store node embeddings to the whole graph as torch tensor
             if nattrs != []:
