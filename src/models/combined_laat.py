@@ -59,6 +59,7 @@ class CombinedLAAT(LAAT):
                  pad_idx=0,
                  pre_trained_weights=None,
                  cui_pre_trained_weights=None,
+                 separate_encoder=False,
                  trainable=False):
         """
         parameter names follow the variables in the LAAT paper, unless otherwise explained
@@ -93,6 +94,7 @@ class CombinedLAAT(LAAT):
                                                       freeze=trainable) if cui_pre_trained_weights is not None else \
             nn.Embedding(n_cui, de, padding_idx=pad_idx)
         self.cui_bilstm = nn.LSTM(input_size=de, hidden_size=u, bidirectional=True, batch_first=True, num_layers=1)
+        self.separate_encoder = separate_encoder
         self.aggregator = nn.Linear(4 * u, 2 * u, bias=True)
         self.init_aggregator()
 
@@ -121,17 +123,19 @@ class CombinedLAAT(LAAT):
         # hidden layers after bilstm for both cui and txt input types
         combined_H = []
         for idx, (embedding_weights, input_tokens_ids, seq_lengths) in enumerate(zip([self.word_embed, self.cui_embed],
-                                                                    [x_txt, x_cui],
-                                                                    [txt_seq_lengths, cui_seq_lengths])):
+                                                                                     [x_txt, x_cui],
+                                                                                     [txt_seq_lengths,
+                                                                                      cui_seq_lengths])):
             embedded = embedding_weights(input_tokens_ids)  # b x txt/cui seq len x de
             embedded = self.dropout(embedded)  # per LAAT paper, dropout applied to embedding step
 
             embedded = nn.utils.rnn.pack_padded_sequence(embedded, seq_lengths, batch_first=True, enforce_sorted=False)
-            if idx > 0:
+            if idx > 0 and self.separate_encoder:
                 # cui input tokens, separate bilstm encoder
                 H, _ = self.cui_bilstm(embedded, lstm_hidden)  # b x cui n x 2u <-- dim of unpacked H
             else:
                 # text input tokens, separate bilstm encoder
+                # or shared bilstm encoder btwn cui and text input tokens
                 H, _ = self.bilstm(embedded, lstm_hidden)  # b x seq txt n x 2u <-- dim of unpacked H
             H, unpacked_lengths = nn.utils.rnn.pad_packed_sequence(H, batch_first=True)
             assert torch.equal(seq_lengths, unpacked_lengths)
@@ -184,7 +188,9 @@ if __name__ == '__main__':
 
     model = CombinedLAAT(n=32, n_cui=32, de=100, L=5, u=256, da=256, dropout=0.3,
                          pre_trained_weights=weights_from_np,
-                         cui_pre_trained_weights=weights_from_np_two, trainable=True)
+                         cui_pre_trained_weights=weights_from_np_two,
+                         separate_encoder=False,
+                         trainable=True)
 
     x_txt = torch.LongTensor(8, 16).random_(1, 31)
     x_cui = torch.LongTensor(8, 16).random_(1, 31)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: WIP
+DESCRIPTION: Access point for LAAT experiments using w2v embeddings, KGE, and combination of w2v and KGE embeddings.
 
 @copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
             Intelligenz GmbH or its licensors, as applicable.
@@ -94,16 +94,18 @@ def load_model(_log,
                        "pre_trained_weights": w2v_weights_from_np,
                        "cui_pre_trained_weights": cui_w2v_weights_from_np,
                        **laat_params}
-
+        _log.info(f"LAAT params for CombinedLAAT: {laat_params}")
         model = CombinedLAAT(**laat_params)
 
     else:
+        # combined laat model has param "separate_encoder" which is not needed/supported by LAAT model
+        _ = laat_params.pop("separate_encoder", None)
         laat_params = {"n": len(dr.featurizer.vocab),
                        "de": embed_matrix.shape[1],
                        "L": len(dr.mlb.classes_),
                        "pre_trained_weights": w2v_weights_from_np,
                        **laat_params}
-
+        _log.info(f"LAAT params for LAAT: {laat_params}")
         model = LAAT(**laat_params)
 
     return model, train_data_loader, dev_data_loader, test_data_loader
@@ -154,6 +156,7 @@ def text_cfg():
                        da=256,
                        dropout=0.3,
                        pad_idx=0,
+                       separate_encoder=False,
                        trainable=False)  # word embedding weights static
 
     # DataReader class params, first arg is batch_size
