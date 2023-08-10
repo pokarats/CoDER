@@ -172,9 +172,19 @@ Please see [Extension Results](/res/README.md#extension-results) for further det
 
 ### Combined Text and CUI Input Model
 
-We also experimented with training the baseline LAAT model with both types of input: text and CUI. We used W2V embeddings
-for the text input type and the case4 KGE for the CUI input type. The idea is to investigate if adding hierachical or 
-relational information in the KGE-represented CUIs to the text-input data improves model's performance.
+We also experimented with training the baseline LAAT model with both types of input: text and CUI. We use W2V embeddings
+for the text input type and the case4 KGE for the CUI input type. The idea is to investigate if **adding** hierachical 
+or relational information in the KGE-represented CUIs to the text-input data improves model's performance.
+
+We experimented with the following set-ups with both the Top50 and Full Datasets:
+
+- Late fusion:
+  - with shared LSTM encoder between CUI and text inputs
+  - two separate LSTM encoders between input types
+  - Post-LAAT fusion vs pre-LAAT fusion
+- Early fusion:
+  - CUI and text embeddings are combined before their fused representation is input to the encoder
+
 
 ### WIP:GNN
 
@@ -188,23 +198,43 @@ To verify this, we experimented with a GNN-based encoder model with pre-trained 
 #### GCN
 
 Following the works in [Learning EHR Graphical Structures with Graph Convolutional Transformer](https://ojs.aaai.org/index.php/AAAI/article/view/5400)
-and [LiGCN](https://aclanthology.org/2022.dlg4nlp-1.7), we set up the task of ICD-9 code/mult-label classification
-as a graph classification problem using GCN and a classification layer.
+and [GCN with Attention for Multi-Label Weather Recognition](https://doi.org/10.1007/s00521-020-05650-8), we set up the 
+task of ICD-9 code/mult-label classification as a graph classification problem using GCN and a classification layer.
+
+For all our experiments, we represent our data as homogenous graphs with one type of nodes and edges. W2V and Case4
+KGE embeddings are initialized as node features. No edge features/weights are used.
+
+Both 'mean' and 'sum' aggregator functions are experimented to created a graph-level representation from node-level
+representations.
+
+Pre-limiary results can be found in the [GNN Results Section](/res/README.md#GNN)
+
+#### GCN Baseline
+
+As a baseline, we utilized semantic information the UMLS and the relational information in the pre-trained KG (case4) 
+to construct graphs representing input documents. Each sample is represented as a graph of CUI entities. Edges are 
+connected based on whether or not there are relations between the CUIs in the KG and/or if they belong to the same
+semantic type.
+
+#### GCN Extension
+
+CUI entities are connected in a way that aligns with a human domain expert's reasoning steps. We selected 5 documents
+and annotated relevant CUIs based on the gold labels. A domain expert with clinical background performed the annotation
+to identify which CUI entities may provide contextual/inference information for the given labels. Based on the insight
+from this annotation exercise and findings in [Learning EHR Graphical Structures with Graph Convolutional Transformer](https://ojs.aaai.org/index.php/AAAI/article/view/5400)
+regarding EHR structure and GCN performance, we proposed building a document graph as follows:
+
+- CUI entities are grouped based on whether they are considered diagnostic, procedure, concept, or laboratory entities.
+- Conditional probabilities of the co-occurrences of CUIs across these groups are pre-calculated from the training set
+- During graph construction, edges are connected if the conditional probability between the CUIs exceed a threshold
+- Edges are also drawn based on relations in the KG to reduce the number of disjointed subgraphs.
 
 ## TODO's + Notes
 
 ### Next Steps
-1. Have baseline GNN model working with baseline edge building schemes (edges between CUIs belong to the same sem type)
-2. Extend from baseline Graph Dataset base-line edge building to incorporate ideas in the following papers:
-  - [GNN-XML paper](http://arxiv.org/abs/2012.05860) --> dig into how they initialize GIN and build their graph/Adj Matrix??
-  - [DFGN paper](https://aclanthology.org/P19-1617) --> for graph/Adj Matrix building
-  - [GCT paper](https://ojs.aaai.org/index.php/AAAI/article/view/5400) --> for graph/Adj Matrix idea
-  - [HyperCore](https://aclanthology.org/2020.acl-main.282) --> for how to aggregate graph with doc text
-3. Experiments:
-   1. SNOMED_KGE + base GNN model
-   2. SNOMED_KGE + extenion GNN Model
-   3. Fine tune and experiments with other types of embeddings?
-   4. Post analysis
+1. Incorporate position information to the GNN approach
+2. Implement GCN Extension
+3. Create visualizations that compare the different graph construction approaches
 
 ### Optional
 
@@ -214,8 +244,9 @@ as a graph classification problem using GCN and a classification layer.
 2. accommodate multi-gpu runs
 3. Hierachical eval metrics, need ICD-9 Tree structure for HEMKIT
 
-### Explainability Extensions (not part of thesis):
-1. GNNExplainer module integration with DGL`
+### Explainability Extensions:
+1. GNNExplainer module integration with DGL 
+2. end-to-end demo of how GNNExplainer could facilitate useful explanation
 
 
 
