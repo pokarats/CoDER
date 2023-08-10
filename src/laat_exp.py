@@ -87,6 +87,7 @@ def load_model(_log,
               f"Test Partition ({len(test_data_loader.dataset)} samples):\n{dr.get_dataset_stats('test')}\n")
 
     if cui_embedding_path is not None:
+        _log.info(f"LAAT params for CombinedLAAT: {laat_params}")
         laat_params = {"n": len(dr.txt_featurizer.vocab),
                        "n_cui": len(dr.featurizer.vocab),
                        "de": embed_matrix.shape[1],
@@ -94,18 +95,18 @@ def load_model(_log,
                        "pre_trained_weights": w2v_weights_from_np,
                        "cui_pre_trained_weights": cui_w2v_weights_from_np,
                        **laat_params}
-        _log.info(f"LAAT params for CombinedLAAT: {laat_params}")
         model = CombinedLAAT(**laat_params)
 
     else:
-        # combined laat model has param "separate_encoder" which is not needed/supported by LAAT model
-        _ = laat_params.pop("separate_encoder", None)
+        # combined laat model has param "separate_encoder" and "post_LAAT_fusion"
+        # which are not supported by LAAT model
+        _, _ = laat_params.pop("separate_encoder", None), laat_params.pop("post_LAAT_fusion", None)
+        _log.info(f"LAAT params for LAAT: {laat_params}")
         laat_params = {"n": len(dr.featurizer.vocab),
                        "de": embed_matrix.shape[1],
                        "L": len(dr.mlb.classes_),
                        "pre_trained_weights": w2v_weights_from_np,
                        **laat_params}
-        _log.info(f"LAAT params for LAAT: {laat_params}")
         model = LAAT(**laat_params)
 
     return model, train_data_loader, dev_data_loader, test_data_loader
@@ -157,6 +158,7 @@ def text_cfg():
                        dropout=0.3,
                        pad_idx=0,
                        separate_encoder=False,
+                       post_LAAT_fusion=True,
                        trainable=False)  # word embedding weights static
 
     # DataReader class params, first arg is batch_size

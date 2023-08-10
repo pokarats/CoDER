@@ -60,6 +60,7 @@ class CombinedLAAT(LAAT):
                  pre_trained_weights=None,
                  cui_pre_trained_weights=None,
                  separate_encoder=False,
+                 post_LAAT_fusion=True,
                  trainable=False):
         """
         parameter names follow the variables in the LAAT paper, unless otherwise explained
@@ -93,10 +94,13 @@ class CombinedLAAT(LAAT):
                                                       padding_idx=pad_idx,
                                                       freeze=trainable) if cui_pre_trained_weights is not None else \
             nn.Embedding(n_cui, de, padding_idx=pad_idx)
-        self.cui_bilstm = nn.LSTM(input_size=de, hidden_size=u, bidirectional=True, batch_first=True, num_layers=1)
         self.separate_encoder = separate_encoder
-        self.aggregator = nn.Linear(4 * u, 2 * u, bias=True)
-        self.init_aggregator()
+        if self.separate_encoder:
+            self.cui_bilstm = nn.LSTM(input_size=de, hidden_size=u, bidirectional=True, batch_first=True, num_layers=1)
+        self.post_LAAT_fusion = post_LAAT_fusion
+        if self.post_LAAT_fusion:
+            self.aggregator = nn.Linear(4 * u, 2 * u, bias=True)
+            self.init_aggregator()
 
     def init_aggregator(self, mean=0.0, std=0.03, xavier=False):
         if xavier:
@@ -139,25 +143,38 @@ class CombinedLAAT(LAAT):
                 H, _ = self.bilstm(embedded, lstm_hidden)  # b x seq txt n x 2u <-- dim of unpacked H
             H, unpacked_lengths = nn.utils.rnn.pad_packed_sequence(H, batch_first=True)
             assert torch.equal(seq_lengths, unpacked_lengths)
+            # print(f"H size: {H.size()}")
             combined_H.append(H)
 
-        # LAAT layers for both cui and txt input types
-        combined_V = []
-        for H in combined_H:
-            Z = torch.tanh(self.W(H))  # b x n x da
-            A = torch.softmax(self.U(Z), dim=1)  # b x n x L, softmax along dim=1 so that each col in L sums to 1!!
-            V = H.transpose(1, 2).bmm(A)  # b x 2u x L, each V has this dim
-            combined_V.append(V)
+        if self.post_LAAT_fusion:
+            # LAAT layers for both cui and txt input types
+            combined_V = []
+            for H in combined_H:
+                Z = torch.tanh(self.W(H))  # b x n x da
+                A = torch.softmax(self.U(Z), dim=1)  # b x n x L, softmax along dim=1 so that each col in L sums to 1!!
+                V = H.transpose(1, 2).bmm(A)  # b x 2u x L, each V has this dim
+                combined_V.append(V)
 
-        combined_V = torch.cat(combined_V, dim=1)  # b x 4u x L <-- concat along dim 1 so 2u + 2u == 4u
-        # print(combined_V.size())
-        V = self.aggregator(combined_V.transpose(1, 2))  # b x L x 2u
-        # print(V.size())
+            combined_V = torch.cat(combined_V, dim=1)  # b x 4u x L <-- concat along dim 1 so 2u + 2u == 4u
+            # print(combined_V.size())
+            V = self.aggregator(combined_V.transpose(1, 2))  # b x L x 2u
+            # print(V.size())
 
-        # LAAT implementation of attention layer weighted sum, bias added after summing
-        # resultant dim: b x L
-        labels_output = self.labels_output.weight.mul(V).sum(dim=2).add(self.labels_output.bias)
-        # print(labels_output.size())
+            # LAAT implementation of attention layer weighted sum, bias added after summing
+            # resultant dim: b x L
+            labels_output = self.labels_output.weight.mul(V).sum(dim=2).add(self.labels_output.bias)
+            # print(labels_output.size())
+        else:
+            concated_H = torch.cat(combined_H, dim=1)  # b x txt n + cui n x 2u
+            # print("concated H", concated_H.size())
+            Z = torch.tanh(self.W(concated_H))  # b x txt n + cui n x da
+            A = torch.softmax(self.U(Z), dim=1)  # b x txt n + cui n L
+            V = concated_H.transpose(1, 2).bmm(A)  # b x 2u x L
+            # print("V size", V.size())
+
+            labels_output = self.labels_output.weight.mul(V.transpose(1, 2)).sum(dim=2).add(self.labels_output.bias)
+            # resultant dim: b x L
+            # print(labels_output.size())
         output = (labels_output,)
 
         if y is not None:
@@ -189,10 +206,11 @@ if __name__ == '__main__':
     model = CombinedLAAT(n=32, n_cui=32, de=100, L=5, u=256, da=256, dropout=0.3,
                          pre_trained_weights=weights_from_np,
                          cui_pre_trained_weights=weights_from_np_two,
-                         separate_encoder=False,
+                         separate_encoder=True,
+                         post_LAAT_fusion=False,
                          trainable=True)
 
-    x_txt = torch.LongTensor(8, 16).random_(1, 31)
+    x_txt = torch.LongTensor(8, 24).random_(1, 31)
     x_cui = torch.LongTensor(8, 16).random_(1, 31)
 
     # simulate padded sequences
