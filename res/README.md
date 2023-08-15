@@ -124,12 +124,37 @@ the results are different from what was reported in the earlier section.
 
 We experimented on with the case4 KGE as this is the best-performming KGE for the CUI input type.
 
+#### Late-Fusion 
+
+##### Shared LSTM Encoder
+
 | Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
 |-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
 | Case4 Top50 |   71.52   |   68.23   |   65.52    |   69.83    |    91.11    |    98.68    | 65.69 |
 | Case4 Full  |   63.13   |   50.10   |    6.25    |   55.87    |    84.38    |    97.74    | 78.76 |
 
 (Results from 12/26/2022 run on [Git Commit@c658090](https://github.com/pokarats/CoDER/commit/c658090f63bd706a28319ef7eac15dfb81082c5e))
+
+##### Separate LSTM Encoder
+
+Post-LAAT Aggregator layer was used to combine the two input representations.
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Case4 Top50 |   72.20   |   68.15   |   65.20    |   70.11    |    92.04    |    94.12    | 66.47 |
+| Case4 Full  |   60.21   |   51.07   |    9.92    |   55.27    |    90.35    |    98.57    | 76.94 |
+
+(Results from 08/10-12/2023 run on [Git Commit@fc63f24](https://github.com/pokarats/CoDER/commit/fc63f249055069cceba27dee23bc1c09303f2829))
+
+LAAT Layer was used to combine the two input represetnations.
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Case4 Top50 |   73.97   |   68.71   |   67.35    |   71.25    |    92.87    |    94.63    | 67.02 |
+| Case4 Full  |   65.60   |   50.56   |    9.99    |   57.11    |    88.06    |    98.38    | 80.47 |
+
+(Results from 08/10-12/2023 run on [Git Commit@fc63f24](https://github.com/pokarats/CoDER/commit/fc63f249055069cceba27dee23bc1c09303f2829))
+
 
 ### GNN
 
