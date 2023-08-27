@@ -5,7 +5,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import dgl
+import math
 from dgl.ops.segment import segment_mm
+from torch import Tensor
 from dgl.nn.pytorch.conv import GINConv
 from dgl.nn.pytorch.glob import SumPooling
 from dgl.dataloading import DataLoader, MultiLayerFullNeighborSampler
@@ -34,7 +36,8 @@ class GCNGraphClassification(nn.Module):
         self.num_layers = num_layers
         self.readout = readout  # mean, sum, attention
         # self.W = nn.Linear(da, da, bias=False)  # intermediary params from LAAT
-        self.U = nn.Linear(da, L, bias=False)  # intermediary params from LAAT
+        if self.readout == "attention":
+            self.U = nn.Linear(da, L, bias=False)  # intermediary params from LAAT
         self.labels_output = nn.Linear(da, L, bias=True)
         self.labels_loss_fct = nn.BCEWithLogitsLoss()
         self.init()  # LAAT initialization
@@ -61,16 +64,18 @@ class GCNGraphClassification(nn.Module):
     def init(self, mean=0.0, std=0.03, xavier=False):
         if xavier:
             # torch.nn.init.xavier_uniform_(self.W.weight)
-            torch.nn.init.xavier_uniform_(self.U.weight)
+            if self.readout == "attention":
+                torch.nn.init.xavier_uniform_(self.U.weight)
             torch.nn.init.xavier_uniform_(self.labels_output.weight)
         else:
             # LAAT paper initialization
             # torch.nn.init.normal_(self.W.weight, mean, std)
             # if self.W.bias is not None:
                 # self.W.bias.data.fill_(0)
-            torch.nn.init.normal_(self.U.weight, mean, std)
-            if self.U.bias is not None:
-                self.U.bias.data.fill_(0)
+            if self.readout == "attention":
+                torch.nn.init.normal_(self.U.weight, mean, std)
+                if self.U.bias is not None:
+                    self.U.bias.data.fill_(0)
             torch.nn.init.normal_(self.labels_output.weight, mean, std)
 
     # GNNExplainer implementation in DGL mirror DGL source implementation of hte GraphConv forward func params
@@ -150,6 +155,34 @@ class GCNGraphClassification(nn.Module):
         return output
 
 
+# Transformer's PE as implemented in Pytorch's Tutorial
+# (https://pytorch.org/tutorials/beginner/transformer_tutorial.html)
+# adapted to align with batch first Tensor
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(1, max_len, d_model)
+        print(pe.size())
+        pe[0, :, 0::2] = torch.sin(position * div_term)
+        pe[0, :, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Arguments:
+            x: Tensor, shape ``[batch_size, seq_len, embedding_dim]``
+        """
+        nonzero_indices = x.nonzero()[:, 1:]  # skipping batch dim
+        # x = x + self.pe[:, :x.size(1)]
+        x = x + self.pe[:, nonzero_indices]
+        return self.dropout(x)
+
+
 """
 ===========================================================================
 Codes below are still under development and are not currently being used!!!
@@ -173,18 +206,6 @@ class HeteroGraphScorePredictor(nn.Module):
                 edge_subgraph.apply_edges(
                     dgl.function.u_dot_v('x', 'x', 'score'), etype=etype)
             return edge_subgraph.edata['score']
-
-
-class StochasticTwoLayerGCN(nn.Module):
-    def __init__(self, in_features, hidden_features, out_features):
-        super().__init__()
-        self.conv1 = dgl.nn.GraphConv(in_features, hidden_features)
-        self.conv2 = dgl.nn.GraphConv(hidden_features, out_features)
-
-    def forward(self, blocks, x):
-        x = nn.relu(self.conv1(blocks[0], x))
-        x = nn.relu(self.conv2(blocks[1], x))
-        return x
 
 
 class StochasticTwoLayerRGCN(nn.Module):
@@ -355,6 +376,7 @@ if __name__ == '__main__':
                                                          data_dir=DATA_DIR,
                                                          version="dummy",
                                                          mode="base_kg_rel",
+                                                         force_reload=True,
                                                          input_type="umls",
                                                          prune_cui=True,
                                                          cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",

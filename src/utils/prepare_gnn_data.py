@@ -11,6 +11,7 @@ from src.utils.corpus_readers import ProcessedIterExtended, get_dataloader
 from src.utils.prepare_laat_data import DataReader, Dataset
 from src.utils.config import PROJ_FOLDER
 
+
 os.environ['DGLBACKEND'] = 'pytorch'
 
 
@@ -53,7 +54,7 @@ class GNNDataReader(DataReader):
         # only need CUIs for now
         # return doc ID, iput CUIs, only unique CUIs, doc len == num of unique CUIs that have been flattened
         if self.input_type == "text":
-            raise NotImplementedError(f"Invalud input_type: only CUI input is supported!")
+            raise NotImplementedError(f"Invalid input_type: only CUI input is supported!")
         elif "umls" in self.input_type:
             umls_doc_iter = self.umls_doc_iterator(self.umls_doc_split_path[split],
                                                    threshold=self.confidence_threshold,
@@ -203,7 +204,7 @@ class GNNDataset(dgl.data.DGLDataset):
         else:
             g = self._transform(self.graphs[index])
         return g, self.labels[index], self.gnidx_cuis[index]
-        # doc_id, input_ids, labels_bin = self.data[index]
+        # doc_id, input_ids, labels_bin, doc_len = self.data[index]
         # return input_ids, labels_bin
 
     def _sem_file_path(self):
@@ -249,35 +250,74 @@ class GNNDataset(dgl.data.DGLDataset):
                 self.cui2cui[src_cui] = [dst_cui]
 
     def _build_graph_edges(self, n_nodes, input_tokens):
-        if "base" in self.mode:
-            # create dgl graph for each doc
-            g = dgl.graph(([], []))
-            g.add_nodes(n_nodes)
-            m_edges = 0
+        # create dgl graph for each doc
+        g = dgl.graph(([], []))
+        g.add_nodes(n_nodes)
+        m_edges = 0
+        if self.self_loop:
+            # product includes self element
+            groupby_iterable = itertools.product(range(n_nodes), repeat=2)
+        else:
+            # permute doesn't include self element
+            groupby_iterable = itertools.permutations(range(n_nodes), r=2)
 
-            if self.self_loop:
-                # product includes self element
-                groupby_iterable = itertools.product(range(n_nodes), repeat=2)
-            else:
-                # permute doesn't include self element
-                groupby_iterable = itertools.permutations(range(n_nodes), r=2)
+        if "base" in self.mode:
             if "kg_rel" in self.mode:
+                # connect cuis only if they have KG relations + self edge
                 for src_dst_pair in groupby_iterable:
                     src_idx, dst_idx = src_dst_pair
                     src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
-                    if dst_cui in self.cui2cui.get(src_cui, []) or (src_idx == dst_idx):
-                        m_edges += 1
-                        g.add_edges(src_idx, dst_idx)
+                    if not g.has_edges_between(src_idx, dst_idx):
+                        # only add edges if it's not there already, dgl doesn't check for this by default
+                        if dst_cui in self.cui2cui.get(src_cui, []) or (src_idx == dst_idx):
+                            g.add_edges(src_idx, dst_idx)
+                            m_edges += 1
             else:
+                # connect edges only based on common TUIs
                 for src_dst_pair in groupby_iterable:
                     src_idx, dst_idx = src_dst_pair
                     src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
-                    if self.cui2tui[src_cui] == self.cui2tui[dst_cui]:
-                        m_edges += 1
+                    if (self.cui2tui[src_cui] == self.cui2tui[dst_cui]) and not g.has_edges_between(src_idx, dst_idx):
                         g.add_edges(src_idx, dst_idx)
-            return g, m_edges
+                        m_edges += 1
+
+        elif "combined_tui_kg_rel" in self.mode:
+            """
+            same as kg_rel
+            and in addition, if src_idx in_degrees > 0 or dst_idx out_degrees > 0,
+            also connect src and dst sharing same TUI.
+            The idea is to have a more connected graph representing the document and fewer disconnected components
+            """
+            for src_dst_pair in groupby_iterable:
+                src_idx, dst_idx = src_dst_pair
+                src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
+                if not g.has_edges_between(src_idx, dst_idx):
+                    # only add edges if it's not there already, dgl doesn't check for this by default
+                    if dst_cui in self.cui2cui.get(src_cui, []) or (src_idx == dst_idx):
+                        g.add_edges(src_idx, dst_idx)
+                        m_edges += 1
+                    elif self.cui2tui[src_cui] == self.cui2tui[dst_cui]:
+                        if g.in_degrees(src_idx) > 0 or g.out_degrees(dst_idx) > 0:
+                            g.add_edges(src_idx, dst_idx)
+                            m_edges += 1
+
+        elif "combined_kg_ehr" in self.mode:
+            """
+            connect src_cui to dst cui only under the following criteria:
+            1) src_cui in Diagnostic SG/TUI AND dst_cui in PROC SG AND their P(dst_cui|src_cui) > threshold e.g.
+            0.3, 0.4, 0.5?
+            2) in addition if src_dx in_degree > 0, connect to dst_cui with same TUI as src_cui if they're within
+            same category (diagnostic/procedure/labs/conc)
+                example:
+                a) if src_cui and dst_cui in conc or dx, connect src_cui and dst_cui with same TUI if src_cui's
+                out_degree > 0
+                b) if src_cui and dst_cui in PROC, LABS, connect src_cui and dst_cui with same TUI if src_cui's in_degree > 0
+            """
+            pass
         else:
             raise NotImplementedError(f"{self.mode} method has not been implemented!!")
+
+        return g, m_edges
 
     @staticmethod
     def _get_subgraphs(g):
@@ -499,7 +539,7 @@ class GNNDataset(dgl.data.DGLDataset):
 if __name__ == '__main__':
     check_gnn_data_reader = False
     check_gnn_dataset = True
-    check_gnn_dataloader = True
+    check_gnn_dataloader = False
     if check_gnn_data_reader:
         data_reader = GNNDataReader(data_dir=f"{PROJ_FOLDER / 'data' / 'mimic3'}",
                                     version="full",
@@ -513,7 +553,7 @@ if __name__ == '__main__':
 
     if check_gnn_dataset:
         data_reader = GNNDataReader(data_dir=f"{PROJ_FOLDER / 'data' / 'mimic3'}",
-                                    version="full",
+                                    version="dummy",
                                     input_type="umls",
                                     prune_cui=True,
                                     cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",
@@ -521,10 +561,15 @@ if __name__ == '__main__':
         gnn_dataset = GNNDataset(dataset=data_reader.get_dataset("train"),
                                  mlb=data_reader.mlb,
                                  name="train",
+                                 mode="combined_tui_kg_rel",
+                                 force_reload=True,
                                  verbose=True)
-        g_sample, label_sample = gnn_dataset[0]
+        num_samples = len(gnn_dataset)
+        g_sample, label_sample, gnidx_sample = gnn_dataset[num_samples - 1]
+        print(gnn_dataset.data[num_samples - 1])
         print(g_sample)
         print(label_sample)
+        print(gnidx_sample)
         print(isinstance(gnn_dataset, dgl.data.DGLDataset))
         print(isinstance(gnn_dataset, Dataset))
 
