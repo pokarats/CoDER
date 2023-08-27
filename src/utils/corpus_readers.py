@@ -11,7 +11,6 @@ and,
 https://github.com/suamin/P4Q_Guttmann_SCT_Coding/blob/main/word2vec.py
 
 """
-import itertools
 from abc import ABC, abstractmethod
 import csv
 import platform
@@ -241,7 +240,8 @@ class MimicDocWholeSentIter(MimicDocIter):
             next(r)
             for row in r:
                 doc_id = f"{row[0]}_{row[1]}"
-                doc_sents = [sent.lstrip("[CLS] ") for sent in row[2].split(self.sep) if sent]
+                # doc_sents = [sent.lstrip(f"{self.cls} ") for sent in row[2].split(self.sep) if sent]
+                doc_sents = [" ".join([w for w in sent.split() if w != self.cls]) for sent in row[2].split(self.sep) if sent]
                 doc_labels = row[3].split(';')
                 doc_len = row[4]
                 if self.slice_pos is None:
@@ -274,7 +274,7 @@ class MimicCuiDocIter(MimicCuiIter):
     def __str__(self):
         return f"MimicCuiDocIter(filename={self.filename}, " \
                f"threshold={self.confidence_threshold}, " \
-               f"pruned={self.pruned}, " \
+               f"pruned={self.prune}, " \
                f"store_sent_cui_span={self.store_sent_cui_span})"
 
     def __iter__(self):
