@@ -100,7 +100,7 @@ def load_model(_log,
     else:
         # combined laat model has param "separate_encoder" and "post_LAAT_fusion"
         # which are not supported by LAAT model
-        _, _, _ = laat_params.pop("separate_encoder", None), laat_params.pop("post_LAAT_fusion", None), \
+        _, _, _ = laat_params.pop("separate_encoder", None), laat_params.pop("post_laat_fusion", None), \
                   laat_params.pop("early_fusion", None)
         _log.info(f"LAAT params for LAAT: {laat_params}")
         laat_params = {"n": len(dr.featurizer.vocab),
@@ -159,7 +159,7 @@ def text_cfg():
                        dropout=0.3,
                        pad_idx=0,
                        separate_encoder=False,
-                       post_LAAT_fusion=True,
+                       post_laat_fusion=True,
                        early_fusion=False,
                        trainable=False)  # word embedding weights static
 
