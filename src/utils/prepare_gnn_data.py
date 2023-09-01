@@ -4,6 +4,7 @@ import dgl
 from dgl.data.utils import save_graphs, save_info, load_graphs, load_info
 import os
 import itertools
+import logging
 import numpy as np
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from src.utils.config import PROJ_FOLDER
 
 
 os.environ['DGLBACKEND'] = 'pytorch'
+
+logger = logging.getLogger(__name__)
 
 
 class GNNDataReader(DataReader):
@@ -331,12 +334,15 @@ class GNNDataset(dgl.data.DGLDataset):
         sem_file = self._sem_file_path()
         if self.verbose:
             print(f"Reading sem type and group info from {sem_file}...")
+            logger.info(f"raw_dir: {self.raw_dir}")
+        logger.info(f"sem_file path: {sem_file}")
         sem_info_iter = ProcessedIterExtended(sem_file, header=True, delimiter="\t")
 
 
         # load saved embeddings, e.g. KGE .npy file
         if self.verbose:
             print(f"Getting embeding from {self._emb_file_path()}")
+        logger.info(f"emb file path: {self._emb_file_path()}")
         cui_ptr_embeddings = np.load(self._emb_file_path())
 
         for row in sem_info_iter:
@@ -453,6 +459,7 @@ class GNNDataset(dgl.data.DGLDataset):
         info_path = os.path.join(
             self.save_path, f"{self.embedding_type}_{self.name}_{self.hash}.pkl"
         )
+        logger.info(f"Saving GNNGraphData and info_dict: {graph_path} and {info_path}...")
         label_dict = {"labels": self.labels}
         info_dict = {
             "gnidx_cui": self.gnidx_cuis,
@@ -483,6 +490,7 @@ class GNNDataset(dgl.data.DGLDataset):
         info_path = os.path.join(
             self.save_path, f"{self.embedding_type}_{self.name}_{self.hash}.pkl"
         )
+        logger.info(f"Loading from saved graph_path and info_path: {graph_path} and {info_path}")
         graphs, label_dict = load_graphs(str(graph_path))
         info_dict = load_info(str(info_path))
 
@@ -515,6 +523,7 @@ class GNNDataset(dgl.data.DGLDataset):
             self.save_path, f"{self.embedding_type}_{self.name}_{self.hash}.pkl"
         )
         if os.path.exists(graph_path) and os.path.exists(info_path):
+            logger.info(f"has_cache, will load from saved data at: {graph_path} and {info_path}")
             return True
         else:
             return False
