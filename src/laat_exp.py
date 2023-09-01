@@ -29,7 +29,7 @@ from models.combined_laat import CombinedLAAT
 from models.train_eval_laat import train, evaluate, generate_preds_file
 from utils.prepare_laat_data import DataReader, Dataset, CombinedDataset
 from src.utils.corpus_readers import get_data
-from utils.corpus_readers import MimicCuiSelectedTextIter
+from utils.corpus_readers import MimicCuiSelectedTextIter, MimicDocWholeSentIter
 from utils.config import PROJ_FOLDER, MODEL_FOLDER, DEV_API_KEY
 from utils.eval import all_metrics
 from neptune.new.integrations.sacred import NeptuneObserver
@@ -175,6 +175,11 @@ def text_cfg():
                          doc_iterator=MimicCuiSelectedTextIter,
                          umls_iterator=None)
     else:
+        if "early_fusion" in input_type:
+            doc_iterator = MimicDocWholeSentIter
+        else:
+            doc_iterator = None
+
         dr_params = dict(data_dir=f"{Path(data_dir) / 'mimic3'}",
                          version=version,
                          input_type=input_type,
@@ -182,7 +187,7 @@ def text_cfg():
                          cui_prune_file=None,
                          vocab_fn=f"processed_full_{input_type}_pruned.json",
                          max_seq_length=4000,
-                         doc_iterator=None,
+                         doc_iterator=doc_iterator,
                          umls_iterator=None)
 
 
