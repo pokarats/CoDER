@@ -60,7 +60,7 @@ class CombinedLAAT(LAAT):
                  pre_trained_weights=None,
                  cui_pre_trained_weights=None,
                  separate_encoder=False,
-                 post_LAAT_fusion=True,
+                 post_laat_fusion=True,
                  trainable=False):
         """
         parameter names follow the variables in the LAAT paper, unless otherwise explained
@@ -97,8 +97,8 @@ class CombinedLAAT(LAAT):
         self.separate_encoder = separate_encoder
         if self.separate_encoder:
             self.cui_bilstm = nn.LSTM(input_size=de, hidden_size=u, bidirectional=True, batch_first=True, num_layers=1)
-        self.post_LAAT_fusion = post_LAAT_fusion
-        if self.post_LAAT_fusion:
+        self.post_laat_fusion = post_laat_fusion
+        if self.post_laat_fusion:
             self.aggregator = nn.Linear(4 * u, 2 * u, bias=True)
             self.init_aggregator()
 
@@ -146,8 +146,10 @@ class CombinedLAAT(LAAT):
             # print(f"H size: {H.size()}")
             combined_H.append(H)
 
-        if self.post_LAAT_fusion:
-            # LAAT layers for both cui and txt input types
+        if self.post_laat_fusion:
+            # separate LAAT layers for both cui and txt input types
+            # concatenation after laat
+            # fusion with fc aggregator layer
             combined_V = []
             for H in combined_H:
                 Z = torch.tanh(self.W(H))  # b x n x da
@@ -165,6 +167,7 @@ class CombinedLAAT(LAAT):
             labels_output = self.labels_output.weight.mul(V).sum(dim=2).add(self.labels_output.bias)
             # print(labels_output.size())
         else:
+            # LAAT layer aggregates/fuses the concatenated cui and txt input layers from LSTM step
             concated_H = torch.cat(combined_H, dim=1)  # b x txt n + cui n x 2u
             # print("concated H", concated_H.size())
             Z = torch.tanh(self.W(concated_H))  # b x txt n + cui n x da
@@ -207,7 +210,7 @@ if __name__ == '__main__':
                          pre_trained_weights=weights_from_np,
                          cui_pre_trained_weights=weights_from_np_two,
                          separate_encoder=True,
-                         post_LAAT_fusion=False,
+                         post_laat_fusion=False,
                          trainable=True)
 
     x_txt = torch.LongTensor(8, 24).random_(1, 31)
