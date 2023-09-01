@@ -477,7 +477,7 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
     logger.info(f"kwargs for DataReader from dr_params: {kwargs}")
     dr = reader(**kwargs)
 
-    if "laat_data" in str(dataset_class):
+    if "laat_data" in str(dataset_class) or "Dataset" in str(dataset_class):
         logger.info(f"dataset_class: {dataset_class}")
         train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'),
                                                          dr.mlb),
@@ -494,7 +494,7 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
                                           batch_size,
                                           False,
                                           collate_fn)
-    elif "gnn_data" in str(dataset_class):
+    elif "gnn_data" in str(dataset_class) or "GNNDataset" in str(dataset_class):
         logger.info(f"dataset_class: {dataset_class}")
         train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'),
                                                          dr.mlb,
@@ -518,7 +518,7 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
                                           False,
                                           collate_fn)
     else:
-        raise NotImplementedError(f"Invalid Dataset Class option!!!")
+        raise NotImplementedError(f"{dataset_class} is an invalid Dataset Class option!!!")
 
     return dr, train_data_loader, dev_data_loader, test_data_loader
 
