@@ -329,15 +329,16 @@ class GNNDataset(dgl.data.DGLDataset):
 
         # get semantic info for cui
         sem_file = self._sem_file_path()
+        if self.verbose:
+            print(f"Reading sem type and group info from {sem_file}...")
         sem_info_iter = ProcessedIterExtended(sem_file, header=True, delimiter="\t")
 
 
-
         # load saved embeddings, e.g. KGE .npy file
+        if self.verbose:
+            print(f"Getting embeding from {self._emb_file_path()}")
         cui_ptr_embeddings = np.load(self._emb_file_path())
 
-        if self.verbose:
-            print(f"Reading sem type and group info from {sem_file}...")
         for row in sem_info_iter:
             cui, tui, sg = row[1], row[2], row[4]
             self.cui2tui[cui] = tui
