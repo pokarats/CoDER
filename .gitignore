@@ -125,6 +125,7 @@ dmypy.json
 /log
 /output
 /data/*.csv
+/data/*.txt
 /data/mimic3/*
 /data/KB
 /cache
