@@ -526,6 +526,7 @@ class GNNDataset(dgl.data.DGLDataset):
             logger.info(f"has_cache, will load from saved data at: {graph_path} and {info_path}")
             return True
         else:
+            logger.info(f"does not have cache, will process from data files in {self.raw_dir}")
             return False
 
     @property
