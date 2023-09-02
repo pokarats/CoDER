@@ -133,7 +133,6 @@ class GNNDataset(dgl.data.DGLDataset):
         self.embedding_type = embedding_type if embedding_type is not None else "snomedcase4"
         self.version = f"{version}"  # sacred commandline parser parses num as int, version needs to be str
         self.mode = mode if mode is not None else "base"
-        self._raw_dir = raw_dir
 
         self.data = dataset  # DataReader.get_dataset('<split: train/dev/test>')
         # self.id2label = {k: v for k, v in enumerate(self.mlb.classes_)}
@@ -177,8 +176,8 @@ class GNNDataset(dgl.data.DGLDataset):
         super().__init__(
             name=name,
             hash_key=(name, embedding_type, version, mode, self_loop),
-            raw_dir=self._raw_dir if self._raw_dir is not None else f"{PROJ_FOLDER / 'data'}",
-            save_dir=save_dir if save_dir is not None else f"{Path(self._raw_dir) / 'gnn_data' / str(version)}",
+            raw_dir=raw_dir if raw_dir is not None else f"{PROJ_FOLDER / 'data'}",
+            save_dir=save_dir if save_dir is not None else f"{Path(raw_dir) / 'gnn_data' / str(version)}",
             force_reload=force_reload,
             verbose=verbose,
             transform=transform,

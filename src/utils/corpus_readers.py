@@ -477,8 +477,8 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
     logger.info(f"kwargs for DataReader from dr_params: {kwargs}")
     dr = reader(**kwargs)
 
-    if "laat_data" in str(dataset_class) or "Dataset" in str(dataset_class):
-        logger.info(f"dataset_class: {dataset_class}")
+    if "laat_data" in str(dataset_class) or (str(dataset_class) == "Dataset"):
+        logger.info(f"should be laat dataset_class: {dataset_class}")
         train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'),
                                                          dr.mlb),
                                            batch_size,
@@ -495,7 +495,7 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
                                           False,
                                           collate_fn)
     elif "gnn_data" in str(dataset_class) or "GNNDataset" in str(dataset_class):
-        logger.info(f"dataset_class: {dataset_class}")
+        logger.info(f"should be GNN dataset_class: {dataset_class}")
         train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'), dr.mlb, 'train', **dataset_class_attr),
                                            batch_size,
                                            True,
