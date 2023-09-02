@@ -467,7 +467,7 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
                               "mode": 'base',  # -->  default == 'base'
                               "self_loop": True,  # --> default == True
                               # "raw_dir" if None --> default == PROJ_FOLDER / 'data'
-                              "verbose": False,  # default == False
+                              "verbose": True,  # default == False
                               "force_reload": False}  # default == False
 
     dataset_class_attr["version"] = kwargs.get("version")  # this attr is also used in DataReader, do not pop
@@ -496,24 +496,15 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
                                           collate_fn)
     elif "gnn_data" in str(dataset_class) or "GNNDataset" in str(dataset_class):
         logger.info(f"dataset_class: {dataset_class}")
-        train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'),
-                                                         dr.mlb,
-                                                         'train',
-                                                         **dataset_class_attr),
+        train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'), dr.mlb, 'train', **dataset_class_attr),
                                            batch_size,
                                            True,
                                            collate_fn)
-        dev_data_loader = get_dataloader(dataset_class(dr.get_dataset('dev'),
-                                                       dr.mlb,
-                                                       'dev',
-                                                       **dataset_class_attr),
+        dev_data_loader = get_dataloader(dataset_class(dr.get_dataset('dev'), dr.mlb, 'dev', **dataset_class_attr),
                                          batch_size,
                                          False,
                                          collate_fn)
-        test_data_loader = get_dataloader(dataset_class(dr.get_dataset('test'),
-                                                        dr.mlb,
-                                                        'test',
-                                                        **dataset_class_attr),
+        test_data_loader = get_dataloader(dataset_class(dr.get_dataset('test'), dr.mlb, 'test', **dataset_class_attr),
                                           batch_size,
                                           False,
                                           collate_fn)
