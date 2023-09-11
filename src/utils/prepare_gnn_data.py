@@ -270,17 +270,18 @@ class GNNDataset(dgl.data.DGLDataset):
                 for src_dst_pair in groupby_iterable:
                     src_idx, dst_idx = src_dst_pair
                     src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
-                    if not g.has_edges_between(src_idx, dst_idx):
-                        # only add edges if it's not there already, dgl doesn't check for this by default
-                        if dst_cui in self.cui2cui.get(src_cui, []) or (src_idx == dst_idx):
-                            g.add_edges(src_idx, dst_idx)
-                            m_edges += 1
+                    # if not g.has_edges_between(src_idx, dst_idx): <-- this added way too long of a runtime!!!
+                    # only add edges if it's not there already, dgl doesn't check for this by default
+                    if dst_cui in self.cui2cui.get(src_cui, []) or (src_idx == dst_idx):
+                        g.add_edges(src_idx, dst_idx)
+                        m_edges += 1
             else:
                 # connect edges only based on common TUIs
                 for src_dst_pair in groupby_iterable:
                     src_idx, dst_idx = src_dst_pair
                     src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
-                    if (self.cui2tui[src_cui] == self.cui2tui[dst_cui]) and not g.has_edges_between(src_idx, dst_idx):
+                    if (self.cui2tui[src_cui] == self.cui2tui[dst_cui]):
+                        # and not g.has_edges_between(src_idx, dst_idx):
                         g.add_edges(src_idx, dst_idx)
                         m_edges += 1
 
@@ -294,15 +295,15 @@ class GNNDataset(dgl.data.DGLDataset):
             for src_dst_pair in groupby_iterable:
                 src_idx, dst_idx = src_dst_pair
                 src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
-                if not g.has_edges_between(src_idx, dst_idx):
+                # if not g.has_edges_between(src_idx, dst_idx): <-- this added way too much run time!!
                     # only add edges if it's not there already, dgl doesn't check for this by default
-                    if dst_cui in self.cui2cui.get(src_cui, []) or (src_idx == dst_idx):
+                if dst_cui in self.cui2cui.get(src_cui, []) or (src_idx == dst_idx):
+                    g.add_edges(src_idx, dst_idx)
+                    m_edges += 1
+                elif self.cui2tui[src_cui] == self.cui2tui[dst_cui]:
+                    if g.in_degrees(src_idx) > 0 or g.out_degrees(dst_idx) > 0:
                         g.add_edges(src_idx, dst_idx)
                         m_edges += 1
-                    elif self.cui2tui[src_cui] == self.cui2tui[dst_cui]:
-                        if g.in_degrees(src_idx) > 0 or g.out_degrees(dst_idx) > 0:
-                            g.add_edges(src_idx, dst_idx)
-                            m_edges += 1
 
         elif "combined_kg_ehr" in self.mode:
             """
