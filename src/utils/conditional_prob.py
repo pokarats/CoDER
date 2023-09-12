@@ -2,8 +2,6 @@ import os
 import itertools
 import logging
 import math
-import numpy as np
-from pathlib import Path
 from collections import Counter
 
 from src.utils.config import PROJ_FOLDER
@@ -19,14 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 class CUIEHRProbModel:
-    def __init__(self,
-                 version,
-                 mode,
-                 embedding_type,
-                 cui_prune_file,
-                 raw_dir=f"{PROJ_FOLDER / 'data'}",
-                 save_dir=None,  # save_path = os.path.join(save_dir, self.name)
-                 threshold=0.7):
+    def __init__(self, version, mode, embedding_type, raw_dir=f"{PROJ_FOLDER / 'data'}", save_dir=None,
+                 cui_prune_file=None, threshold=0.7):
         self.version = str(version)
         self.mode = mode
         self.embedding_type = embedding_type
@@ -223,10 +215,7 @@ class CUIEHRProbModel:
 
 
 if __name__ == '__main__':
-    cui_plm = CUIEHRProbModel(version=50,
-                              mode="combined_kg_ehr",
-                              embedding_type="snomedcase4",
-                              cui_prune_file=None)
+    cui_plm = CUIEHRProbModel(version=50, mode="combined_kg_ehr", embedding_type="snomedcase4", cui_prune_file=None)
         # test prob: proc_lab == 0.287
         # test prob: conc_dx == 0.733
         # test prob: conc_proc == 0.498

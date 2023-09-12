@@ -10,6 +10,7 @@ from pathlib import Path
 
 from src.utils.corpus_readers import ProcessedIterExtended, get_dataloader
 from src.utils.prepare_laat_data import DataReader, Dataset
+from src.utils.conditional_prob import CUIEHRProbModel
 from src.utils.config import PROJ_FOLDER
 
 
@@ -113,20 +114,9 @@ class GNNDataReader(DataReader):
 
 class GNNDataset(dgl.data.DGLDataset):
 
-    def __init__(self,
-                 dataset,
-                 mlb,
-                 name="train",
-                 embedding_type="snomedcase4",
-                 version="full",
-                 mode="base",  # graph building mode, base vs <name_of_experiment>
-                 self_loop=True,
-                 raw_dir=f"{PROJ_FOLDER / 'data'}",
-                 save_dir=None,  # save_path = os.path.join(save_dir, self.name)
-                 force_reload=False,
-                 verbose=True,
-                 transform=None,
-                 ):
+    def __init__(self, dataset, mlb, name="train", embedding_type="snomedcase4", version="full", mode="base",
+                 self_loop=True, raw_dir=f"{PROJ_FOLDER / 'data'}", save_dir=None, force_reload=False, verbose=True,
+                 ehr_min_prob=0.3, transform=None):
 
         self._name = name  # MIMIC-III-CUI train/dev/test partition
         self.ds_name = "mimic3_cui"
@@ -142,6 +132,9 @@ class GNNDataset(dgl.data.DGLDataset):
         self.cui2sg = dict()  # mapping cui to semantic group from semantic_info.csv <-- \t separated col 4
         if "kg_rel" in mode:
             self.cui2cui = dict()  # mapping src_cui to dst_cui where a non inverse_isa rel exists between them
+        if "ehr" in mode:
+            self.ehr_min_prob = ehr_min_prob
+            self.ehr_prob_model = CUIEHRProbModel(version, mode, embedding_type, raw_dir, save_dir)
 
         self.self_loop = self_loop if self_loop is not None else True
         self.graphs = []
@@ -305,19 +298,29 @@ class GNNDataset(dgl.data.DGLDataset):
                         g.add_edges(src_idx, dst_idx)
                         m_edges += 1
 
-        elif "combined_kg_ehr" in self.mode:
+        elif "combined_kg_rel_ehr" in self.mode:
             """
             connect src_cui to dst cui only under the following criteria:
             1) src_cui in Diagnostic SG/TUI AND dst_cui in PROC SG AND their P(dst_cui|src_cui) > threshold e.g.
             0.3, 0.4, 0.5?
-            2) in addition if src_dx in_degree > 0, connect to dst_cui with same TUI as src_cui if they're within
-            same category (diagnostic/procedure/labs/conc)
+            2) in addition if src_dx and dst_cui are within
+            same category (diagnostic/procedure/labs/conc) or in KG relations
                 example:
-                a) if src_cui and dst_cui in conc or dx, connect src_cui and dst_cui with same TUI if src_cui's
-                out_degree > 0
-                b) if src_cui and dst_cui in PROC, LABS, connect src_cui and dst_cui with same TUI if src_cui's in_degree > 0
+                a) if src_cui and dst_cui have rel in KG, connect src_cui and dst_cui
             """
-            pass
+            for src_dst_pair in groupby_iterable:
+                src_idx, dst_idx = src_dst_pair
+                src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
+                if self.ehr_prob_model.get_prob(src_cui, dst_cui) >= self.ehr_min_prob:
+                    # add edge only if probability between cuis meet min threshold
+                    # see conditional_prob.py for possible SG combinations to generate valid conditional prob values
+                    # e.g. dx_proc, conc_dx, conc_proc, proc_labs are valid combinations, all else have 0.0 prob
+                    g.add_edges(src_idx, dst_idx)
+                    m_edges += 1
+                elif dst_cui in self.cui2cui.get(src_cui, []) or (src_idx == dst_idx):
+                    # otherwise, still connect if relation exists in KG
+                    g.add_edges(src_idx, dst_idx)
+                    m_edges += 1
         else:
             raise NotImplementedError(f"{self.mode} method has not been implemented!!")
 
@@ -570,12 +573,8 @@ if __name__ == '__main__':
                                     prune_cui=True,
                                     cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",
                                     vocab_fn="processed_full_umls_pruned.json")
-        gnn_dataset = GNNDataset(dataset=data_reader.get_dataset("train"),
-                                 mlb=data_reader.mlb,
-                                 name="train",
-                                 mode="combined_tui_kg_rel",
-                                 force_reload=True,
-                                 verbose=True)
+        gnn_dataset = GNNDataset(dataset=data_reader.get_dataset("train"), mlb=data_reader.mlb, name="train",
+                                 mode="combined_kg_rel_ehr", force_reload=True, verbose=True)
         num_samples = len(gnn_dataset)
         g_sample, label_sample, gnidx_sample = gnn_dataset[num_samples - 1]
         print(gnn_dataset.data[num_samples - 1])
