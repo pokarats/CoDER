@@ -3,6 +3,7 @@ import itertools
 import logging
 import math
 from collections import Counter
+from pathlib import Path
 
 from src.utils.config import PROJ_FOLDER
 from src.utils.corpus_readers import MimicCuiDocIter, ProcessedIterExtended
@@ -24,7 +25,8 @@ class CUIEHRProbModel:
         self.embedding_type = embedding_type
         self.raw_dir = raw_dir
         self.save_dir = save_dir
-        self.cui_prune_file = cui_prune_file if cui_prune_file is not None else self._prune_file_path()
+        self.cui_prune_file = f"{Path(self.raw_dir) / 'linked_data' / self.version / cui_prune_file}" \
+            if cui_prune_file is not None else self._prune_file_path()
         self.threshold = threshold
         self.cui2tui = dict()
         self.tui2sg = dict()

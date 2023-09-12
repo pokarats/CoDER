@@ -170,6 +170,7 @@ def gnn_cfg():
                          threshold=0.83,
                          mode="gcn_base",
                          ehr_min_prob=0.3,
+                         pos_encoding=False,
                          verbose=True)
 
 

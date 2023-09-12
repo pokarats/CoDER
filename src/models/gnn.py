@@ -179,7 +179,7 @@ class HeteroGraphScorePredictor(nn.Module):
                     dgl.function.u_dot_v('x', 'x', 'score'), etype=etype)
             return edge_subgraph.edata['score']
 
-
+"""
 class StochasticTwoLayerRGCN(nn.Module):
     def __init__(self, in_feat, hidden_feat, out_feat, rel_names):
         super().__init__()
@@ -217,6 +217,7 @@ class GCNModel(nn.Module):
 
         return pos_score, neg_score
 
+"""
 
 class MLP(nn.Module):
     """Construct two-layer MLP-type aggreator for GIN model"""
@@ -347,8 +348,10 @@ if __name__ == '__main__':
                                                          reader=GNNDataReader,
                                                          data_dir=DATA_DIR,
                                                          version="dummy",
-                                                         mode="base_kg_rel",
+                                                         mode="kg_rel_ehr",
                                                          force_reload=True,
+                                                         ehr_min_prob=0.3,
+                                                         pos_encoding=True,
                                                          input_type="umls",
                                                          prune_cui=True,
                                                          cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",

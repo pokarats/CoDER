@@ -182,7 +182,8 @@ class GNNDataset(dgl.data.DGLDataset):
 
     def __init__(self, dataset, mlb, name="train", embedding_type="snomedcase4", version="full", mode="base",
                  self_loop=True, raw_dir=f"{PROJ_FOLDER / 'data'}", save_dir=None, force_reload=False, verbose=True,
-                 ehr_min_prob=0.3, pos_encoding=False, max_seq_length=2600, de=100, transform=None):
+                 cui_prune_file=None, ehr_min_prob=0.3, pos_encoding=False, max_seq_length=2600, de=100,
+                 transform=None):
 
         self._name = name  # MIMIC-III-CUI train/dev/test partition
         self.ds_name = "mimic3_cui"
@@ -200,7 +201,7 @@ class GNNDataset(dgl.data.DGLDataset):
             self.cui2cui = dict()  # mapping src_cui to dst_cui where a non inverse_isa rel exists between them
         if "ehr" in mode:
             self.ehr_min_prob = ehr_min_prob
-            self.ehr_prob_model = CUIEHRProbModel(version, mode, embedding_type, raw_dir, save_dir)
+            self.ehr_prob_model = CUIEHRProbModel(version, mode, embedding_type, raw_dir, save_dir, cui_prune_file)
         self.pos_encoding = pos_encoding
         if self.pos_encoding:
             self.position_encoder = PositionalEncoding(de, max_seq_length)
@@ -367,7 +368,7 @@ class GNNDataset(dgl.data.DGLDataset):
                         g.add_edges(src_idx, dst_idx)
                         m_edges += 1
 
-        elif "combined_kg_rel_ehr" in self.mode:
+        elif "ehr" in self.mode:
             """
             connect src_cui to dst cui only under the following criteria:
             1) src_cui in Diagnostic SG/TUI AND dst_cui in PROC SG AND their P(dst_cui|src_cui) > threshold e.g.
@@ -380,16 +381,19 @@ class GNNDataset(dgl.data.DGLDataset):
             for src_dst_pair in groupby_iterable:
                 src_idx, dst_idx = src_dst_pair
                 src_cui, dst_cui = input_tokens[src_idx], input_tokens[dst_idx]
-                if self.ehr_prob_model.get_prob(src_cui, dst_cui) >= self.ehr_min_prob:
+                if self.ehr_prob_model.get_prob(src_cui, dst_cui) >= self.ehr_min_prob or (src_idx == dst_idx):
                     # add edge only if probability between cuis meet min threshold
                     # see conditional_prob.py for possible SG combinations to generate valid conditional prob values
                     # e.g. dx_proc, conc_dx, conc_proc, proc_labs are valid combinations, all else have 0.0 prob
+                    # also add self-loop (if src_idx == dst_idx)
                     g.add_edges(src_idx, dst_idx)
                     m_edges += 1
-                elif dst_cui in self.cui2cui.get(src_cui, []) or (src_idx == dst_idx):
-                    # otherwise, still connect if relation exists in KG
-                    g.add_edges(src_idx, dst_idx)
-                    m_edges += 1
+                elif dst_cui in self.cui2cui.get(src_cui, []):
+                    if "combined_kg_rel" in self.mode:
+                        # otherwise, still connect if relation exists in KG
+                        # without combined_kg_rel in mode, only rely on ehr prob model
+                        g.add_edges(src_idx, dst_idx)
+                        m_edges += 1
         else:
             raise NotImplementedError(f"{self.mode} method has not been implemented!!")
 

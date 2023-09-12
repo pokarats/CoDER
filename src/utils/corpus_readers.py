@@ -472,14 +472,14 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
                               "force_reload": False}  # default == False
 
     dataset_class_attr["version"] = kwargs.get("version")  # this attr is also used in DataReader, do not pop
-    logger.info(f"dataset_class_attr after updates: {dataset_class_attr}")
-
-    # initialize datareader class after popping non-relevant keys
-    logger.info(f"kwargs for DataReader from dr_params: {kwargs}")
-    dr = reader(**kwargs)
 
     if "laat_data" in str(dataset_class) or (str(dataset_class) == "Dataset"):
         logger.info(f"should be laat dataset_class: {dataset_class}")
+        _ = kwargs.pop("pos_encoding", None)  # remove pos_encoding from laat DataReader if in kwargs
+
+        # initialize datareader class after popping non-relevant keys
+        logger.info(f"kwargs for DataReader from dr_params: {kwargs}")
+        dr = reader(**kwargs)
         train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'),
                                                          dr.mlb),
                                            batch_size,
@@ -497,6 +497,13 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
                                           collate_fn)
     elif "gnn_data" in str(dataset_class) or "GNNDataset" in str(dataset_class):
         logger.info(f"should be GNN dataset_class: {dataset_class}")
+        dataset_class_attr["pos_encoding"] = kwargs.get("pos_encoding", False)  # need in both DataSet and DataReader
+        dataset_class_attr["cui_prune_file"] = kwargs.get("cui_prune_file", None)
+        logger.info(f"dataset_class_attr after updates: {dataset_class_attr}")
+
+        # initialize datareader class after popping non-relevant keys
+        logger.info(f"kwargs for DataReader from dr_params: {kwargs}")
+        dr = reader(**kwargs)
         train_data_loader = get_dataloader(dataset_class(dr.get_dataset('train'), dr.mlb, 'train', **dataset_class_attr),
                                            batch_size,
                                            True,
