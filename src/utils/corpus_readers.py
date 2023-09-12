@@ -458,7 +458,7 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
     """
 
     dataset_class_attr = {k: kwargs.pop(k) for k in ["embedding_type", "mode", "self_loop", "raw_dir", "verbose",
-                                                     "force_reload"]
+                                                     "force_reload", "ehr_min_prob"]
                           if k in kwargs}
 
     if not dataset_class_attr:
@@ -468,6 +468,7 @@ def get_data(batch_size, dataset_class, collate_fn, reader, **kwargs):
                               "self_loop": True,  # --> default == True
                               # "raw_dir" if None --> default == PROJ_FOLDER / 'data'
                               "verbose": True,  # default == False
+                              "ehr_min_prob": 0.3,  # default == 0.3, only used if for ehr_prob_mode GNNDataset
                               "force_reload": False}  # default == False
 
     dataset_class_attr["version"] = kwargs.get("version")  # this attr is also used in DataReader, do not pop
