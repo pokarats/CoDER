@@ -388,8 +388,8 @@ class GNNDataset(dgl.data.DGLDataset):
                     # also add self-loop (if src_idx == dst_idx)
                     g.add_edges(src_idx, dst_idx)
                     m_edges += 1
-                elif dst_cui in self.cui2cui.get(src_cui, []):
-                    if "combined_kg_rel" in self.mode:
+                elif "combined_kg_rel" in self.mode:
+                    if dst_cui in self.cui2cui.get(src_cui, []):
                         # otherwise, still connect if relation exists in KG
                         # without combined_kg_rel in mode, only rely on ehr prob model
                         g.add_edges(src_idx, dst_idx)
