@@ -1,11 +1,15 @@
 import networkx
 import torch
+import torch.nn as nn
+from torch import Tensor
 import dgl
 from dgl.data.utils import save_graphs, save_info, load_graphs, load_info
 import os
 import itertools
 import logging
 import numpy as np
+import math
+from typing import List
 from pathlib import Path
 
 from src.utils.corpus_readers import ProcessedIterExtended, get_dataloader
@@ -19,6 +23,45 @@ os.environ['DGLBACKEND'] = 'pytorch'
 logger = logging.getLogger(__name__)
 
 
+# Transformer's PE as implemented in Pytorch's Tutorial
+# (https://pytorch.org/tutorials/beginner/transformer_tutorial.html)
+# adapted to align with batch first Tensor
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, d_model: int, max_len: int = 5000, pooling="max", dropout: float = 0.3):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+        self.pooling = pooling
+
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, d_model)
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+    def forward(self, node_embedding: Tensor, pos: List[int]) -> Tensor:
+        """
+        Arguments:
+            x: Tensor, shape ``[batch_size, seq_len, embedding_dim]``
+            :param node_embedding: input node_embedding shape [embedding_dim]
+            :type node_embedding: Tensor
+            :param pos:
+            :type pos: List[int]
+        """
+        pooling_function = {"max": torch.max,
+                            "sum": torch.sum,
+                            "mean": torch.mean}
+        pooled_embd, *indices = pooling_function.get(self.pooling, torch.max)(self.pe[pos], dim=0, keepdim=True)
+
+        if self.pooling == "max":
+            pooled_embd = pooled_embd.squeeze()
+
+        node_embedding = node_embedding + pooled_embd
+        # print(f"node_embedding dim: {node_embedding.shape}")
+        return self.dropout(node_embedding)
+
+
 class GNNDataReader(DataReader):
     """
     Read datafile(s) from both text .csv files and pre-processed lined_data dataset files for CUI inputs and prepare
@@ -27,6 +70,12 @@ class GNNDataReader(DataReader):
     1) Each sample will be returned as list of unique CUIs
     2) MLB for each sample labels
     3) Calculate stats for each partition
+
+    if pos_encoding == True:
+    store mapping of input_id to list of positions the cui/input_id occurs in each document
+
+    based on LAAT CUI snomedcase4 data, position encoding should cover up to max 2600 (test partition max seq length
+    for CUI input is 2528)
     """
 
     def __init__(self,
@@ -36,6 +85,7 @@ class GNNDataReader(DataReader):
                  prune_cui=True,
                  cui_prune_file="50_cuis_to_discard_snomedcase4.pickle",
                  vocab_fn="processed_full_text_pruned.json",
+                 pos_encoding=False,
                  max_seq_length=None,
                  doc_iterator=None,
                  umls_iterator=None,
@@ -53,6 +103,17 @@ class GNNDataReader(DataReader):
                          second_txt_vocab_fn=second_txt_vocab_fn,
                          threshold=threshold)
         self.doc2len = dict()
+        self.pos_encoding = pos_encoding
+
+    @staticmethod
+    def _store_tok2pos(doc_tokens):
+        token2pos = dict()
+        for pos, token in enumerate(doc_tokens):
+            try:
+                token2pos[token].append(pos)
+            except KeyError:
+                token2pos[token] = [pos]
+        return token2pos
 
     def _fit_transform(self, split):
         # only need CUIs for now
@@ -68,9 +129,9 @@ class GNNDataReader(DataReader):
             text_lab_iter = self.doc_iterator(self.doc_split_path[split], slice_pos=3)
             for doc_id, (umls_data), doc_labels in zip(text_id_iter, umls_doc_iter, text_lab_iter):
                 u_id, u_sents, u_len = umls_data
-                tokens = itertools.chain.from_iterable(u_sents)
+                tokens = list(itertools.chain.from_iterable(u_sents))
                 # tokens are CUIs tokens, flattened
-                unique_tokens_only = set(tokens)  # each CUI token will be a node
+                unique_tokens_only = list(set(tokens))  # each CUI token will be a node
                 input_ids = self.featurizer.convert_tokens_to_features(unique_tokens_only, max_seq_length=None)
                 # input ids correspond to row idx in .npy embedding files and vocab .json files
                 self.doc2labels[doc_id] = doc_labels
@@ -83,8 +144,13 @@ class GNNDataReader(DataReader):
                     self.doc2len[split] = dict()
                     self.doc2len[split][doc_id] = len(unique_tokens_only)
 
-                yield doc_id, input_ids, list(unique_tokens_only), self.mlb.transform([doc_labels]), len(
-                    unique_tokens_only)
+                if self.pos_encoding:
+                    token2pos_mapping = self._store_tok2pos(tokens)
+                    yield doc_id, input_ids, unique_tokens_only, self.mlb.transform([doc_labels]), \
+                          len(unique_tokens_only), token2pos_mapping
+                else:
+                    yield doc_id, input_ids, unique_tokens_only, self.mlb.transform([doc_labels]), \
+                          len(unique_tokens_only)
         else:
             raise NotImplementedError(f"Invalid input_type option!")
 
@@ -116,7 +182,7 @@ class GNNDataset(dgl.data.DGLDataset):
 
     def __init__(self, dataset, mlb, name="train", embedding_type="snomedcase4", version="full", mode="base",
                  self_loop=True, raw_dir=f"{PROJ_FOLDER / 'data'}", save_dir=None, force_reload=False, verbose=True,
-                 ehr_min_prob=0.3, transform=None):
+                 ehr_min_prob=0.3, pos_encoding=False, max_seq_length=2600, de=100, transform=None):
 
         self._name = name  # MIMIC-III-CUI train/dev/test partition
         self.ds_name = "mimic3_cui"
@@ -135,6 +201,9 @@ class GNNDataset(dgl.data.DGLDataset):
         if "ehr" in mode:
             self.ehr_min_prob = ehr_min_prob
             self.ehr_prob_model = CUIEHRProbModel(version, mode, embedding_type, raw_dir, save_dir)
+        self.pos_encoding = pos_encoding
+        if self.pos_encoding:
+            self.position_encoder = PositionalEncoding(de, max_seq_length)
 
         self.self_loop = self_loop if self_loop is not None else True
         self.graphs = []
@@ -367,7 +436,11 @@ class GNNDataset(dgl.data.DGLDataset):
             if (graph_i + 1) % 500 == 0 and self.verbose is True:
                 print(f"processing graph {graph_i + 1}...")
             doc_data = self.data[graph_i]
-            doc_id, input_ids, input_tokens, glabel, n_nodes = doc_data
+
+            if self.pos_encoding:
+                doc_id, input_ids, input_tokens, glabel, n_nodes, input_token2pos,  = doc_data
+            else:
+                doc_id, input_ids, input_tokens, glabel, n_nodes = doc_data
 
             # convert ndarray to Tensor first and append to list
             # avoid converting list of ndarrays to Tensor later, cat along dim=0 instead when batching
@@ -385,7 +458,12 @@ class GNNDataset(dgl.data.DGLDataset):
             nidx_to_cui = dict()  # mapping graph g's node_idx (0-indexed) to cui
             for node_j in range(n_nodes):
                 embd_row_idx = input_ids[node_j]
-                nattrs.append(cui_ptr_embeddings[embd_row_idx])
+                node_embd = cui_ptr_embeddings[embd_row_idx]
+                if self.pos_encoding:
+                    pos_list = input_token2pos[input_tokens[node_j]]
+                    node_embd = torch.Tensor(node_embd)
+                    node_embd = self.position_encoder(node_embd, pos_list)
+                nattrs.append(node_embd)
 
                 # relabel nodes if it has labels
                 # if it doesn't have node labels, then every node's label is its cui semantic tui
@@ -401,8 +479,16 @@ class GNNDataset(dgl.data.DGLDataset):
 
             # store node embeddings to the whole graph as torch tensor
             if nattrs != []:
-                nattrs = np.stack(nattrs)  # dim[0] == number of nodes/graph, dim[1] embedding dimension e.g. 100
-                g.ndata["attr"] = torch.Tensor(nattrs)  # torch.Tensor defaults to dtype float32
+                if isinstance(nattrs[0], np.ndarray):
+                    # without pos encoding, embedding weights are still ndarray
+                    nattrs = np.stack(nattrs)  # dim[0] == number of nodes/graph, dim[1] embedding dimension e.g. 100
+                    g.ndata["attr"] = torch.Tensor(nattrs)  # torch.Tensor defaults to dtype float32
+                elif isinstance(nattrs[0], torch.Tensor):
+                    # with pos encoding, embedding weights are already torch Tensor weights
+                    nattrs = torch.stack(nattrs)
+                    g.ndata["attr"] = nattrs
+                else:
+                    raise NotImplementedError(f"Unsupported node embedding object type!")
                 self.nattrs_flag = True
 
             # store node labels as float32 tensor if any
@@ -572,9 +658,11 @@ if __name__ == '__main__':
                                     input_type="umls",
                                     prune_cui=True,
                                     cui_prune_file="full_cuis_to_discard_snomedcase4.pickle",
-                                    vocab_fn="processed_full_umls_pruned.json")
+                                    vocab_fn="processed_full_umls_pruned.json",
+                                    pos_encoding=True)
         gnn_dataset = GNNDataset(dataset=data_reader.get_dataset("train"), mlb=data_reader.mlb, name="train",
-                                 mode="combined_kg_rel_ehr", force_reload=True, verbose=True)
+                                 mode="combined_kg_rel_ehr", force_reload=True, verbose=True, pos_encoding=True,
+                                 max_seq_length=2600, de=100)
         num_samples = len(gnn_dataset)
         g_sample, label_sample, gnidx_sample = gnn_dataset[num_samples - 1]
         print(gnn_dataset.data[num_samples - 1])
