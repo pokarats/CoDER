@@ -28,17 +28,25 @@ logger = logging.getLogger(__name__)
 # adapted to align with batch first Tensor
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model: int, max_len: int = 5000, pooling="max", dropout: float = 0.3):
+    def __init__(self, d_model: int, max_len: int = 5000, pooling="max",
+                 encoding_type: str = "absolute", dropout: float = 0.3):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
         self.pooling = pooling
+        self.encoding_type = encoding_type
 
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-        pe = torch.zeros(max_len, d_model)
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
+        if self.encoding_type == "sincos":
+            position = torch.arange(max_len).unsqueeze(1)
+            div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+            pe = torch.zeros(max_len, d_model)
+            pe[:, 0::2] = torch.sin(position * div_term)
+            pe[:, 1::2] = torch.cos(position * div_term)
+            self.register_buffer('pe', pe)
+        elif self.encoding_type == "absolute":
+            self.pe = nn.Embedding(max_len, d_model)
+        else:
+            raise NotImplementedError(f"{self.encoding_type} is not supported!!")
+
 
     def forward(self, node_embedding: Tensor, pos: List[int]) -> Tensor:
         """
@@ -52,7 +60,13 @@ class PositionalEncoding(nn.Module):
         pooling_function = {"max": torch.max,
                             "sum": torch.sum,
                             "mean": torch.mean}
-        pooled_embd, *indices = pooling_function.get(self.pooling, torch.max)(self.pe[pos], dim=0, keepdim=True)
+        if self.encoding_type == "sincos":
+            pooled_embd, *indices = pooling_function.get(self.pooling, torch.max)(self.pe[pos], dim=0, keepdim=True)
+        elif self.encoding_type == "absolute":
+            pooled_embd, *indices = pooling_function.get(self.pooling, torch.max)(self.pe(torch.LongTensor(pos)),
+                                                                                  dim=0, keepdim=True)
+        else:
+            raise NotImplementedError(f"{self.encoding_type} not supported in forward!!")
 
         if self.pooling == "max":
             pooled_embd = pooled_embd.squeeze()
