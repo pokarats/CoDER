@@ -156,28 +156,28 @@ LAAT Layer was used to combine the two input represetnations.
 (Results from 08/10-12/2023 run on [Git Commit@fc63f24](https://github.com/pokarats/CoDER/commit/fc63f249055069cceba27dee23bc1c09303f2829))
 
 
-### GNN
+### GNN: 2-layer GCN Baseline Results
 
-#### 2-layer GCN without Attention (GNN Baseline)
+Baseline 2-layer GCN model as encoder without the LAAT Attention mechanism. Preliminary experiments indicated that using
+LAAT layers in-lieu of 'mean' / 'sum' readout functions was not beneficial to model's performance.
+All hypermarameters remain the same as in the baseline LAAT model.
 
-Baseline 2-layer GCN model as encoder without the LAAT Attention mechanism. All hypermarameters remain the same as in 
-the baseline LAAT model.
+Baseline graph construction approaches rely on shared TUI or relations from KG.
 
-Graph Construction Method: CUIs connected if they belong to the same TUI
+#### Preliminary Baseline: CUIs connected if they belong to the same TUI
 
+'mean' readout function was used for this experiment.
 
-| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
-|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
-| Base Top50  |   63.19   |   35.40   |   36.25    |   45.38    |    80.96    |    84.79    | 49.82 |
-| Case4 Top50 |   62.11   |   36.01   |   36.42    |   45.59    |    81.88    |    85.43    | 50.02 |
-| W2V Top50   |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
-| Base Full   |   52.56   |   18.89   |    2.88    |   27.79    |    80.12    |    96.71    | 54.74 |
-| Case4 Full  |   53.40   |   19.19   |    2.88    |   28.24    |    80.96    |    96.86    | 55.72 |
-| W2V Full    |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |    P@5    |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---------:|
+| Base Top50  | **63.19** |   35.40   |   36.25    |   45.38    |    80.96    |    84.79    |   49.82   |
+| Case4 Top50 |   62.11   | **36.01** | **36.42**  | **45.59**  |  **81.88**  |  **85.43**  | **50.02** |
+| Base Full   |   52.56   |   18.89   |    2.88    |   27.79    |    80.12    |    96.71    |   54.74   |
+| Case4 Full  | **53.40** | **19.19** |    2.88    | **28.24**  |  **80.96**  |  **96.86**  | **55.72** |
 
 (Results from 5/22-24/2023 run on [Git Commit@ac47a9](https://github.com/pokarats/CoDER/commit/ac47a9da0124f4dcd6d155f634217a31bb685c91))
 
-#### 2-layer GCN without Attention (GNN KGE Baseline)
+#### KG Graph Construction Method: CUIs connected if they have shared relations
 
 Same as the basic GNN approach above, but baseline graph construction utilizes KGE relation information.
 CUIs are connected if they have a relation between them in the KG.
@@ -205,3 +205,37 @@ CUIs are connected if they have a relation between them in the KG.
 | W2V Full    |   62.94   |   19.26   |    1.93    |   29.50    |    76.67    |    96.44    |   60.27   |
 
 (Results from 8/5-8/2023 run on [Git Commit@2bcb60](https://github.com/pokarats/CoDER/commit/2bcb60ab8ebde0998e98c0f2eefb07b7a9baeabf)
+
+### Graph Construction Method with EHR Structure/Clinical Reasoning 
+
+Following insight from manual annotation and the idea in  [Learning EHR Graphical Structures with Graph Convolutional Transformer](https://ojs.aaai.org/index.php/AAAI/article/view/5400),
+we construction each graph representing an input document following the following heuristic:
+
+- CUI entities are grouped based on whether they are considered diagnostic, procedure, concept, or laboratory entities.
+- Conditional probabilities of the co-occurrences of CUIs across these groups are pre-calculated from the training set
+- During graph construction, edges are connected if the conditional probability between the CUIs exceed a threshold
+  - **experiment thresholds: 0.3, 0.5, 0.7, 0.8**
+
+An additional experiment was performed to combine the EHR-guided approach with the baseline KG relations. The motivation
+is to see if combining the two approaches, resultnig in more edges and fewer disjointed subgraphs, will help model learn
+more useful information.
+
+Best results for the Top50 version are from the experiment with 0.7 threshold and with 0.5 for the Full version.
+
+#### 'sum' aggregator readout, comparing results from 0.7 and 0.5 threshold for Top50 and Full
+
+| Model           | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |    P@5    |
+|-----------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---------:|
+| Case4 Top50 0.7 |   65.24   | **48.41** | **48.71**  | **55.58**  |  **84.72**  |  **87.71**  | **56.22** |
+| Case4 Top50 0.5 | **66.25** |   41.57   |   43.76    |   51.09    |    83.90    |    86.88    |   55.60   |
+| Case4 Full 0.7  | **61.17** |   17.88   |    2.12    |   26.67    |    75.08    |    96.20    |   58.56   |
+| Case4 Full 0.5  |   60.69   | **18.91** |  **2.23**  | **28.84**  |  **76.10**  |  **96.40**  | **59.32** |
+
+#### 'mean' aggregator readout, comparing results from 0.7 and 0.5 threshold for Top50 and Full
+
+| Model           | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) | P@5 |
+|-----------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---:|
+| Case4 Top50 0.7 |     -     |     -     |     -      |     -      |      -      |      -      |  -  |
+| Case4 Full 0.5  |     -     |     -     |     -      |     -      |      -      |      -      |  -  |
+
+(Results from 9/14-9/18/2023 run on [Git Commit@fdec63](https://github.com/pokarats/CoDER/commit/fdec630303cdda2d99cd5fce98bad0c86c7ce6bf)

@@ -231,10 +231,10 @@ regarding EHR structure and GCN performance, we proposed building a document gra
 
 ## TODO's + Notes
 
-### Next Steps
-1. Incorporate position information to the GNN approach
-2. Implement GCN Extension
-3. Create visualizations that compare the different graph construction approaches
+### Explainability Extensions:
+1. GNNExplainer module integration with DGL 
+2. end-to-end demo of how GNNExplainer could facilitate useful explanation 
+   1. Create visualizations that compare the different graph construction approaches
 
 ### Optional
 
@@ -244,9 +244,7 @@ regarding EHR structure and GCN performance, we proposed building a document gra
 2. accommodate multi-gpu runs
 3. Hierachical eval metrics, need ICD-9 Tree structure for HEMKIT
 
-### Explainability Extensions:
-1. GNNExplainer module integration with DGL 
-2. end-to-end demo of how GNNExplainer could facilitate useful explanation
+
 
 
 
