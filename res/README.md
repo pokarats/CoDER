@@ -224,16 +224,16 @@ Best results for the Top50 version are from the experiment with 0.7 threshold an
 
 #### 'sum' aggregator readout, comparing results from 0.7 and 0.5 threshold for Top50 and Full
 
-| Model                | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |    P@5    |
-|----------------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---------:|
-| Case4 Top50 0.7      |   65.24   | **48.41** | **48.71**  | **55.58**  |  **84.72**  |  **87.71**  |   56.22   |
-| Case4 Top50 0.7[^kg] | **69.34** |   43.99   |   46.58    |   53.83    |    84.44    |    87.64    | **56.33** |
-| Case4 Top50 0.5      |   66.25   |   41.57   |   43.76    |   51.09    |    83.90    |    86.88    |   55.60   |
-| Case4 Full 0.7       | **61.17** |   17.88   |    2.12    |   26.67    |    75.08    |    96.20    |   58.56   |
-| Case4 Full 0.5[^kg]  |     -     |     -     |     -      |     -      |      -      |      -      |     -     |
-| Case4 Full 0.5       |   60.69   | **18.91** |  **2.23**  | **28.84**  |  **76.10**  |  **96.40**  | **59.32** |
+| Model                 | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |    P@5    |
+|-----------------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---------:|
+| Case4 Top50 0.7       |   65.24   | **48.41** | **48.71**  | **55.58**  |  **84.72**  |  **87.71**  |   56.22   |
+| Case4 Top50 0.7[^kgf] | **69.34** |   43.99   |   46.58    |   53.83    |    84.44    |    87.64    | **56.33** |
+| Case4 Top50 0.5       |   66.25   |   41.57   |   43.76    |   51.09    |    83.90    |    86.88    |   55.60   |
+| Case4 Full 0.7        | **61.17** |   17.88   |    2.12    |   26.67    |    75.08    |    96.20    |   58.56   |
+| Case4 Full 0.5[^kgf]  |     -     |     -     |     -      |     -      |      -      |      -      |     -     |
+| Case4 Full 0.5        |   60.69   | **18.91** |  **2.23**  | **28.84**  |  **76.10**  |  **96.40**  | **59.32** |
 
-[^kg] with connections between CUIs also when they shre relations in KG .
+[^kgf]: With connections between CUIs also when they shre relations in KG .
 
 #### 'mean' aggregator readout, comparing results from 0.7 and 0.5 threshold for Top50 and Full
 
