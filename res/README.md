@@ -237,9 +237,9 @@ Best results for the Top50 version are from the experiment with 0.7 threshold an
 
 #### 'mean' aggregator readout, comparing results from 0.7 and 0.5 threshold for Top50 and Full
 
-| Model           | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) | P@5 |
-|-----------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---:|
-| Case4 Top50 0.7 |     -     |     -     |     -      |     -      |      -      |      -      |  -  |
-| Case4 Full 0.5  |     -     |     -     |     -      |     -      |      -      |      -      |  -  |
+| Model           | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|-----------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Case4 Top50 0.7 |   65.21   |   38.55   |   38.75    |   48.46    |    83.90    |    86.67    | 52.31 |
+| Case4 Full 0.5  |     -     |     -     |     -      |     -      |      -      |      -      |   -   |
 
 (Results from 9/14-9/18/2023 run on [Git Commit@fdec63](https://github.com/pokarats/CoDER/commit/fdec630303cdda2d99cd5fce98bad0c86c7ce6bf)
