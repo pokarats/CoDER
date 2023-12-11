@@ -59,6 +59,9 @@ class CombinedLAAT(LAAT):
                  pad_idx=0,
                  pre_trained_weights=None,
                  cui_pre_trained_weights=None,
+                 separate_encoder=False,
+                 post_laat_fusion=True,
+                 early_fusion=True,
                  trainable=False):
         """
         parameter names follow the variables in the LAAT paper, unless otherwise explained
@@ -78,6 +81,12 @@ class CombinedLAAT(LAAT):
         :type da: int
         :param dropout:
         :type dropout:
+        :param separate_encoder: T/F whether to use separte LSTM encoder for each input type
+        :type separate_encoder: bool
+        :param post_laat_fusion: T/F use aggregator layer to combine inputs after separate LAAT layer
+        :type post_laat_fusion: bool
+        :param early_fusion: T/F to combine inputs from the embedding step (pre-LSTM layer)
+        :type early_fusion: bool
         """
         super().__init__(n=n,
                          de=de,
@@ -92,8 +101,14 @@ class CombinedLAAT(LAAT):
                                                       padding_idx=pad_idx,
                                                       freeze=trainable) if cui_pre_trained_weights is not None else \
             nn.Embedding(n_cui, de, padding_idx=pad_idx)
-        self.aggregator = nn.Linear(4 * u, 2 * u, bias=True)
-        self.init_aggregator()
+        self.separate_encoder = separate_encoder
+        if self.separate_encoder:
+            self.cui_bilstm = nn.LSTM(input_size=de, hidden_size=u, bidirectional=True, batch_first=True, num_layers=1)
+        self.post_laat_fusion = post_laat_fusion
+        self.early_fusion = early_fusion
+        if self.post_laat_fusion and not self.early_fusion:
+            self.aggregator = nn.Linear(4 * u, 2 * u, bias=True)
+            self.init_aggregator()
 
     def init_aggregator(self, mean=0.0, std=0.03, xavier=False):
         if xavier:
@@ -116,38 +131,89 @@ class CombinedLAAT(LAAT):
 
         # init lstm h, c layers (can use either txt or cui batch size as both have the same batch size)
         lstm_hidden = self.init_lstm_hidden(txt_batch_size)
+        self.bilstm.flatten_parameters()
 
-        # hidden layers after bilstm for both cui and txt input types
-        combined_H = []
-        for embedding_weights, input_tokens_ids, seq_lengths in zip([self.word_embed, self.cui_embed],
-                                                                    [x_txt, x_cui],
-                                                                    [txt_seq_lengths, cui_seq_lengths]):
-            embedded = embedding_weights(input_tokens_ids)  # b x txt/cui seq len x de
-            embedded = self.dropout(embedded)  # per LAAT paper, dropout applied to embedding step
+        # early fusion share one lstm encoder as the two inputs are fused before lstm input
+        if self.early_fusion:
+            # adding the embeddings of the cui inputs to the txt element-wise
+            # x_cui are mostly 0 (pad tokens) with conly idx for CUIs at the spans of x_txt
+            embedded_txt = self.word_embed(x_txt)
+            embedded_cui = self.cui_embed(x_cui)
+            combined_embedded = torch.add(embedded_txt, embedded_cui)
+            combined_embedded = self.dropout(combined_embedded)
 
-            embedded = nn.utils.rnn.pack_padded_sequence(embedded, seq_lengths, batch_first=True, enforce_sorted=False)
-            H, _ = self.bilstm(embedded, lstm_hidden)  # b x seq txt/cui n x 2u <-- dim of unpacked H
+            combined_embedded = nn.utils.rnn.pack_padded_sequence(combined_embedded,
+                                                                  txt_seq_lengths,
+                                                                  batch_first=True,
+                                                                  enforce_sorted=False)
+            H, _ = self.bilstm(combined_embedded, lstm_hidden)
+
+            # pad packed output H
             H, unpacked_lengths = nn.utils.rnn.pad_packed_sequence(H, batch_first=True)
-            assert torch.equal(seq_lengths, unpacked_lengths)
-            combined_H.append(H)
+            assert torch.equal(txt_seq_lengths, unpacked_lengths)
+        else:
+            # not early_fusion
+            # hidden layers after bilstm for both cui and txt input types
+            combined_H = []
+            for idx, (embedding_weights, input_tokens_ids, seq_lengths) in enumerate(zip([self.word_embed, self.cui_embed],
+                                                                                         [x_txt, x_cui],
+                                                                                         [txt_seq_lengths,
+                                                                                          cui_seq_lengths])):
+                embedded = embedding_weights(input_tokens_ids)  # b x txt/cui seq len x de
+                embedded = self.dropout(embedded)  # per LAAT paper, dropout applied to embedding step
 
-        # LAAT layers for both cui and txt input types
-        combined_V = []
-        for H in combined_H:
-            Z = torch.tanh(self.W(H))  # b x n x da
-            A = torch.softmax(self.U(Z), dim=1)  # b x n x L, softmax along dim=1 so that each col in L sums to 1!!
-            V = H.transpose(1, 2).bmm(A)  # b x 2u x L, each V has this dim
-            combined_V.append(V)
+                embedded = nn.utils.rnn.pack_padded_sequence(embedded, seq_lengths, batch_first=True, enforce_sorted=False)
+                if idx > 0 and self.separate_encoder:
+                    # cui input tokens, separate bilstm encoder
+                    self.cui_bilstm.flatten_parameters()
+                    H, _ = self.cui_bilstm(embedded, lstm_hidden)  # b x cui n x 2u <-- dim of unpacked H
+                else:
+                    # text input tokens, separate bilstm encoder
+                    # or shared bilstm encoder btwn cui and text input tokens
+                    H, _ = self.bilstm(embedded, lstm_hidden)  # b x seq txt n x 2u <-- dim of unpacked H
+                H, unpacked_lengths = nn.utils.rnn.pad_packed_sequence(H, batch_first=True)
+                assert torch.equal(seq_lengths, unpacked_lengths)
+                # print(f"H size: {H.size()}")
+                combined_H.append(H)
 
-        combined_V = torch.cat(combined_V, dim=1)  # b x 4u x L <-- concat along dim 1 so 2u + 2u == 4u
-        # print(combined_V.size())
-        V = self.aggregator(combined_V.transpose(1, 2))  # b x L x 2u
-        # print(V.size())
+        if self.post_laat_fusion and not self.early_fusion:
+            # separate LAAT layers for both cui and txt input types
+            # concatenation after laat
+            # fusion with fc aggregator layer
+            combined_V = []
+            for H in combined_H:
+                Z = torch.tanh(self.W(H))  # b x n x da
+                A = torch.softmax(self.U(Z), dim=1)  # b x n x L, softmax along dim=1 so that each col in L sums to 1!!
+                V = H.transpose(1, 2).bmm(A)  # b x 2u x L, each V has this dim
+                combined_V.append(V)
 
-        # LAAT implementation of attention layer weighted sum, bias added after summing
-        # resultant dim: b x L
-        labels_output = self.labels_output.weight.mul(V).sum(dim=2).add(self.labels_output.bias)
-        # print(labels_output.size())
+            combined_V = torch.cat(combined_V, dim=1)  # b x 4u x L <-- concat along dim 1 so 2u + 2u == 4u
+            # print(combined_V.size())
+            V = self.aggregator(combined_V.transpose(1, 2))  # b x L x 2u
+            # print(V.size())
+
+            # LAAT implementation of attention layer weighted sum, bias added after summing
+            # resultant dim: b x L
+            labels_output = self.labels_output.weight.mul(V).sum(dim=2).add(self.labels_output.bias)
+            # print(labels_output.size())
+        else:
+            if self.early_fusion:
+                # early fusion, same LAAT layer as in laat.py
+                concated_H = H
+            else:
+                # LAAT layer aggregates/fuses the concatenated cui and txt input layers from LSTM step
+                concated_H = torch.cat(combined_H, dim=1)  # b x txt n + cui n x 2u
+                # print("concated H", concated_H.size())
+
+
+            Z = torch.tanh(self.W(concated_H))  # b x txt n + cui n x da
+            A = torch.softmax(self.U(Z), dim=1)  # b x txt n + cui n L
+            V = concated_H.transpose(1, 2).bmm(A)  # b x 2u x L
+            # print("V size", V.size())
+
+            labels_output = self.labels_output.weight.mul(V.transpose(1, 2)).sum(dim=2).add(self.labels_output.bias)
+            # resultant dim: b x L
+            # print(labels_output.size())
         output = (labels_output,)
 
         if y is not None:
@@ -178,10 +244,15 @@ if __name__ == '__main__':
 
     model = CombinedLAAT(n=32, n_cui=32, de=100, L=5, u=256, da=256, dropout=0.3,
                          pre_trained_weights=weights_from_np,
-                         cui_pre_trained_weights=weights_from_np_two, trainable=True)
+                         cui_pre_trained_weights=weights_from_np_two,
+                         separate_encoder=False,
+                         post_laat_fusion=False,
+                         early_fusion=True,
+                         trainable=True)
 
-    x_txt = torch.LongTensor(8, 16).random_(1, 31)
-    x_cui = torch.LongTensor(8, 16).random_(1, 31)
+    x_txt = torch.LongTensor(8, 24).random_(1, 31)
+    x_cui = torch.LongTensor(8, 16).random_(1, 31)  # uncomment this to test regular CombinedLAAT
+    # x_cui = torch.LongTensor(8, 24).random_(1, 31)  # uncomment this to test early_fusion, need equal seq length
 
     # simulate padded sequences
     for x in [x_txt, x_cui]:

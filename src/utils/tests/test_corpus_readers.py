@@ -1,5 +1,5 @@
 import unittest
-from src.utils.corpus_readers import ProcessedIter, MimicIter, MimicDocIter, MimicCuiDocIter
+from src.utils.corpus_readers import ProcessedIter, MimicDocIter, MimicCuiDocIter
 from src.utils.config import PROJ_FOLDER
 import itertools
 

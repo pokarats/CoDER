@@ -7,13 +7,18 @@ DESCRIPTION: Generates the `ICD9_umls2020aa` file, mapping the ICD-9 codes to CU
 
 @author: Saadullah Amin
 """
-
+import sys
+import os
+import platform
+if platform.system() != 'Darwin':
+    sys.path.append(os.getcwd())
+else:
+    sys.path.extend(['/Users/noonscape/Documents/msc_thesis/projects/CoDER'])
 import json
 import pandas as pd
 import argparse
 import logging
 import time
-import sys
 
 from pathlib import Path
 from authentication import *

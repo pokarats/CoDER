@@ -22,7 +22,7 @@
 **NOTE:** that for the Full Version, _the extension criteria (finding < 1 ICD label corresponding to input CUIs)_ were
 never met. Hence, identical results: i.e. No extensions were triggered.
 
-### Non-Deep-Learning Models
+### Machine Learning Models
 
 Overall, using 2-gram feature option improves performance across all models in both **Top-50** and **Full** versions. 
 Our best LR model with **UMLS CUIS** input type shows
@@ -124,6 +124,10 @@ the results are different from what was reported in the earlier section.
 
 We experimented on with the case4 KGE as this is the best-performming KGE for the CUI input type.
 
+#### Late-Fusion 
+
+##### Shared LSTM Encoder
+
 | Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
 |-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
 | Case4 Top50 |   71.52   |   68.23   |   65.52    |   69.83    |    91.11    |    98.68    | 65.69 |
@@ -131,6 +135,111 @@ We experimented on with the case4 KGE as this is the best-performming KGE for th
 
 (Results from 12/26/2022 run on [Git Commit@c658090](https://github.com/pokarats/CoDER/commit/c658090f63bd706a28319ef7eac15dfb81082c5e))
 
-### GNN
+##### Separate LSTM Encoder
 
-WIP
+Post-LAAT Aggregator layer was used to combine the two input representations.
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Case4 Top50 |   72.20   |   68.15   |   65.20    |   70.11    |    92.04    |    94.12    | 66.47 |
+| Case4 Full  |   60.21   |   51.07   |    9.92    |   55.27    |    90.35    |    98.57    | 76.94 |
+
+(Results from 08/10-12/2023 run on [Git Commit@fc63f24](https://github.com/pokarats/CoDER/commit/fc63f249055069cceba27dee23bc1c09303f2829))
+
+LAAT Layer was used to combine the two input represetnations.
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |  P@5  |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:-----:|
+| Case4 Top50 |   73.97   |   68.71   |   67.35    |   71.25    |    92.87    |    94.63    | 67.02 |
+| Case4 Full  |   65.60   |   50.56   |    9.99    |   57.11    |    88.06    |    98.38    | 80.47 |
+
+(Results from 08/10-12/2023 run on [Git Commit@fc63f24](https://github.com/pokarats/CoDER/commit/fc63f249055069cceba27dee23bc1c09303f2829))
+
+
+### GNN: 2-layer GCN Baseline Results
+
+Baseline 2-layer GCN model as encoder without the LAAT Attention mechanism. Preliminary experiments indicated that using
+LAAT layers in-lieu of 'mean' / 'sum' readout functions was not beneficial to model's performance.
+All hypermarameters remain the same as in the baseline LAAT model.
+
+Baseline graph construction approaches rely on shared TUI or relations from KG.
+
+#### Preliminary Baseline: CUIs connected if they belong to the same TUI
+
+'mean' readout function was used for this experiment.
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |    P@5    |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---------:|
+| Base Top50  | **63.19** |   35.40   |   36.25    |   45.38    |    80.96    |    84.79    |   49.82   |
+| Case4 Top50 |   62.11   | **36.01** | **36.42**  | **45.59**  |  **81.88**  |  **85.43**  | **50.02** |
+| Base Full   |   52.56   |   18.89   |    2.88    |   27.79    |    80.12    |    96.71    |   54.74   |
+| Case4 Full  | **53.40** | **19.19** |    2.88    | **28.24**  |  **80.96**  |  **96.86**  | **55.72** |
+
+(Results from 5/22-24/2023 run on [Git Commit@ac47a9](https://github.com/pokarats/CoDER/commit/ac47a9da0124f4dcd6d155f634217a31bb685c91))
+
+#### KG Graph Construction Method: CUIs connected if they have shared relations
+
+Same as the basic GNN approach above, but baseline graph construction utilizes KGE relation information.
+CUIs are connected if they have a relation between them in the KG.
+
+##### 'mean' aggregator readout
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |    P@5    |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---------:|
+| Base Top50  |   67.03   |   36.18   |   38.26    |   46.99    |    83.85    |    86.83    |   52.62   |
+| Case4 Top50 |   67.67   |   37.72   |   38.68    |   48.44    |    84.46    |    87.28    |   53.70   |
+| W2V Top50   |   64.54   |   21.99   |   21.01    |   32.80    |    76.77    |    80.89    |   43.09   |
+| Base Full   |   64.66   |   18.59   |    2.41    |   28.87    |    83.56    |    97.31    |   62.73   |
+| Case4 Full  |   63.68   | **19.77** |  **2.82**  | **30.17**  |  **84.65**  |  **97.46**  | **63.60** |
+| W2V Full    | **67.78** |   16.69   |    1.18    |   26.79    |    84.47    |    97.40    |   60.82   |
+
+##### 'sum' aggregator readout
+
+| Model       | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |    P@5    |
+|-------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---------:|
+| Base Top50  |   66.52   |   42.64   |   42.98    |   51.97    |    83.77    |    86.82    |   53.95   |
+| Case4 Top50 | **67.81** | **45.02** | **47.33**  | **54.12**  |  **84.55**  |  **87.41**  | **56.00** |
+| W2V Top50   |   65.69   |   38.68   |   38.76    |   48.68    |    82.98    |    86.26    |   51.97   |
+| Base Full   |   62.03   |   16.75   |    1.47    |   26.38    |    76.48    |    96.38    |   57.08   |
+| Case4 Full  |   55.53   |   17.81   |    1.80    |   26.97    |    77.19    |    96.08    |   55.60   |
+| W2V Full    |   62.94   |   19.26   |    1.93    |   29.50    |    76.67    |    96.44    |   60.27   |
+
+(Results from 8/5-8/2023 run on [Git Commit@2bcb60](https://github.com/pokarats/CoDER/commit/2bcb60ab8ebde0998e98c0f2eefb07b7a9baeabf)
+
+### Graph Construction Method with EHR Structure/Clinical Reasoning 
+
+Following insight from manual annotation and the idea in  [Learning EHR Graphical Structures with Graph Convolutional Transformer](https://ojs.aaai.org/index.php/AAAI/article/view/5400),
+we construction each graph representing an input document following the following heuristic:
+
+- CUI entities are grouped based on whether they are considered diagnostic, procedure, concept, or laboratory entities.
+- Conditional probabilities of the co-occurrences of CUIs across these groups are pre-calculated from the training set
+- During graph construction, edges are connected if the conditional probability between the CUIs exceed a threshold
+  - **experiment thresholds: 0.3, 0.5, 0.7, 0.8**
+
+An additional experiment was performed to combine the EHR-guided approach with the baseline KG relations. The motivation
+is to see if combining the two approaches, resultig in more edges and fewer disjointed subgraphs, will help model learn
+more useful information. Results from combining the two approaches seem to have mixed results.
+
+Best results for the Top50 version are from the experiment with 0.7 threshold and with 0.5 for the Full version.
+
+#### 'sum' aggregator readout, comparing results from 0.7 and 0.5 threshold for Top50 and Full
+
+| Model                 | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |    P@5    |
+|-----------------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---------:|
+| Case4 Top50 0.7       |   65.24   | **48.41** | **48.71**  | **55.58**  |  **84.72**  |  **87.71**  |   56.22   |
+| Case4 Top50 0.7[^kgf] | **69.34** |   43.99   |   46.58    |   53.83    |    84.44    |    87.64    | **56.33** |
+| Case4 Top50 0.5       |   66.25   |   41.57   |   43.76    |   51.09    |    83.90    |    86.88    |   55.60   |
+| Case4 Full 0.7        |   61.17   |   17.88   |    2.12    |   26.67    |    75.08    |    96.20    |   58.56   |
+| Case4 Full 0.5[^kgf]  |   63.88   |   17.94   |    2.11    |   28.01    |    74.75    |    96.22    |   60.13   |
+| Case4 Full 0.5        |   60.69   | **18.91** |    2.23    | **28.84**  |    76.10    |    96.40    |   59.32   |
+
+[^kgf]: With connections between CUIs also when they share relations in KG .
+
+#### 'mean' aggregator readout, comparing results from 0.7 and 0.5 threshold for Top50 and Full
+
+| Model           | P (Micro) | R (Micro) | F1 (Macro) | F1 (Micro) | AUC (Macro) | AUC (Micro) |    P@5    |
+|-----------------|:---------:|:---------:|:----------:|:----------:|:-----------:|:-----------:|:---------:|
+| Case4 Top50 0.7 |   65.21   |   38.55   |   38.75    |   48.46    |    83.90    |    86.67    |   52.31   |
+| Case4 Full 0.5  | **64.24** |   16.96   |  **2.51**  |   26.84    |  **82.06**  |  **97.12**  | **62.57** |
+
+(Results from 9/14-9/18/2023 run on [Git Commit@fdec63](https://github.com/pokarats/CoDER/commit/fdec630303cdda2d99cd5fce98bad0c86c7ce6bf)

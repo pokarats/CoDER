@@ -1,12 +1,7 @@
-# WIP: Graph Structures in Knowledge-Aware Multi-Label Classification for Healthcare Data
+# Towards Understanding Graph Structures in Medical Codes Classification
 This project contains code and documentation for all experiments related to thesis work on exploring graph structures
 in knowledge-aware ICD coding task on the MIMIC-III dataset. The task is set up as a multi-label classification
 problem.
-
-**WIP:DISCLAIMER:** 
-- While Work is in progress (WIP) not all information is up-to-date or accurate.
-- Ignore any instructions in here until further notice.
-- the only things being updated at the moment are the todo's/developer's notes
 
 ## Requirements
 
@@ -104,9 +99,9 @@ in the input
 has the 
 highest similarity score (among scores above a specified threshold, e.g. 0.7) to the CUIs in the input
 
-### Non Deep Learning (DL) Models
+### Machine Learning (ML) Models
 
-Using TFIDF for feature extraction, we experimented with the following Non-DL Models:
+Using TFIDF for feature extraction, we experimented with the following ML Models:
 
 - **Logistic Regression (LR)**
   - 1-gram
@@ -134,7 +129,7 @@ We implemented the [LAAT Model](https://arxiv.org/abs/2007.06351) following thei
 their publication.
 
 
-## Proposed Extensions
+## Extensions
 
 From the baseline results, the CUI input models are within a few percentage points in precision score (both the top-50
 and full versions). The F1 scores are also within 10-15 percentage points of the text-input models. Recall scores show
@@ -168,11 +163,23 @@ CUIS in the MIMIC dataset. This reduced representation correlates with the lower
 surprising, however, that with only 50% of CUIs present, the model can still achieve higher evaluation metrics than
 using the baseline W2V embeddings for the CUI input type.
 
+Please see [Extension Results](/res/README.md#extension-results) for further details.
+
 ### Combined Text and CUI Input Model
 
-We also experimented with training the baseline LAAT model with both types of input: text and CUI. We used W2V embeddings
-for the text input type and the case4 KGE for the CUI input type. The idea is to investigate if adding hierachical or 
-relational information in the KGE-represented CUIs to the text-input data improves model's performance.
+We also experimented with training the baseline LAAT model with both types of input: text and CUI. We use W2V embeddings
+for the text input type and the case4 KGE for the CUI input type. The idea is to investigate if **adding** hierachical 
+or relational information in the KGE-represented CUIs to the text-input data improves model's performance.
+
+We experimented with the following set-ups with both the Top50 and Full Datasets:
+
+- Late fusion:
+  - with shared LSTM encoder between CUI and text inputs
+  - two separate LSTM encoders between input types
+  - Post-LAAT fusion vs pre-LAAT fusion
+- Early fusion:
+  - CUI and text embeddings are combined before their fused representation is input to the encoder
+
 
 ### GNN
 
@@ -181,32 +188,63 @@ We hypothesized that the LSTM-based encoder in the baseline LAAT model favors se
 As a result, any gain in hierachical or relational information from KGE pretraining would have been negated by the
 encoder model. 
 
-To verify this, we experimented with a GNN-based encoder model with pre-trained KGE.
+To verify this, we experimented with a GNN-based encoder model with pre-trained KGE. (Results pending implementation)
 
 #### GCN
 
 Following the works in [Learning EHR Graphical Structures with Graph Convolutional Transformer](https://ojs.aaai.org/index.php/AAAI/article/view/5400)
-and [LiGCN](https://aclanthology.org/2022.dlg4nlp-1.7), we set up the task of ICD-9 code/mult-label classification
-as a graph classification problem using GCN and a classification layer.
+and [GCN with Attention for Multi-Label Weather Recognition](https://doi.org/10.1007/s00521-020-05650-8), we set up the 
+task of ICD-9 code/mult-label classification as a graph classification problem using GCN and a classification layer.
 
-## TODO's + Notes
+For all our experiments, we represent our data as homogenous graphs with one type of nodes and edges. W2V and Case4
+KGE embeddings are initialized as node features. No edge features/weights are used.
 
-1. add CLEF file format capability for running baseline and future experiments for 
+Both 'mean' and 'sum' aggregator functions are experimented to created a graph-level representation from node-level
+representations.
+
+Pre-limiary results can be found in the [GNN Results Section](/res/README.md#GNN)
+
+#### GCN Baseline
+
+As a baseline, we utilized semantic information the UMLS and the relational information in the pre-trained KG (case4) 
+to construct graphs representing input documents. Each sample is represented as a graph of CUI entities. Edges are 
+connected based on whether or not there are relations between the CUIs in the KG and/or if they belong to the same
+semantic type.
+
+#### GCN Extension
+
+CUI entities are connected in a way that aligns with a human domain expert's reasoning steps. We selected 5 documents
+and annotated relevant CUIs based on the gold labels. A domain expert with clinical background performed the annotation
+to identify which CUI entities may provide contextual/inference information for the given labels. Based on the insight
+from this annotation exercise and findings in [Learning EHR Graphical Structures with Graph Convolutional Transformer](https://ojs.aaai.org/index.php/AAAI/article/view/5400)
+regarding EHR structure and GCN performance, we proposed building a document graph as follows:
+
+- CUI entities are grouped based on whether they are considered diagnostic, procedure, concept, or laboratory entities.
+- Conditional probabilities of the co-occurrences of CUIs across these groups are pre-calculated from the training set
+- During graph construction, edges are connected if the conditional probability between the CUIs exceed a threshold
+- Edges are also drawn based on relations in the KG to reduce the number of disjointed subgraphs.
+
+## Future Research Directions (Not completed)
+
+### Explainability Extensions:
+1. GNNExplainer module integration with DGL 
+2. end-to-end demo of how GNNExplainer could facilitate useful explanation 
+   1. Create visualizations that compare the different graph construction approaches
+
+### Other Ideas
+
+1. Adding CLEF file format capability for running baseline and future experiments for 
    processing input text and label IDs
    1. possible to experiment with other datasets that have been clef-formatted
-2. accommodate multi-gpu runs?
-3. KGE, GNN implementation
-4. Hierachical eval metrics, need ICD-9 Tree structure for HEMKIT
+2. accommodate multi-gpu runs
+3. Hierarchical evaluation metrics, need ICD-9 Tree structure for HEMKIT
 
 
-- KGE 
-  - instead of w2v, try this for the CUI-input model with the LAAT model
-  - [SNOMED KGE](https://github.com/dchang56/snomed_kge)-->use [DGL implementation](https://github.com/awslabs/dgl-ke)
-- GNN
-  - [GNN-XML paper](http://arxiv.org/abs/2012.05860) --> dig into how they initialize GIN and build their graph/Adj Matrix??
-  - [DFGN paper](https://aclanthology.org/P19-1617) --> for graph/Adj Matrix building
-  - [GCT paper](https://ojs.aaai.org/index.php/AAAI/article/view/5400) --> for graph/Adj Matrix idea
-  - [HyperCore](https://aclanthology.org/2020.acl-main.282) --> for how to aggregate graph with doc text
+
+
+
+
+
   
 
 

@@ -125,7 +125,13 @@ dmypy.json
 /log
 /output
 /data/*.csv
+/data/*.txt
 /data/mimic3/*
+/data/mimic3/semantic_types_mimic.txt
+/data/ICD9_descriptions
+/data/ICD9_umls2020aa
+/data/ICD9_umls2020aa_50_mimic3
+/data/concepts_pruning.py
 /data/KB
 /cache
 /runs

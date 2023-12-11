@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-DESCRIPTION: WIP
+DESCRIPTION: Access point for LAAT experiments using w2v embeddings, KGE, and combination of w2v and KGE embeddings.
 
 @copyright: Copyright 2018 Deutsches Forschungszentrum fuer Kuenstliche
             Intelligenz GmbH or its licensors, as applicable.
@@ -27,8 +27,9 @@ if platform.system() != 'Darwin':
 from models.laat import LAAT
 from models.combined_laat import CombinedLAAT
 from models.train_eval_laat import train, evaluate, generate_preds_file
-from utils.prepare_laat_data import get_data, Dataset, CombinedDataset
-from utils.corpus_readers import MimicCuiSelectedTextIter
+from utils.prepare_laat_data import DataReader, Dataset, CombinedDataset
+from src.utils.corpus_readers import get_data
+from utils.corpus_readers import MimicCuiSelectedTextIter, MimicDocWholeSentIter
 from utils.config import PROJ_FOLDER, MODEL_FOLDER, DEV_API_KEY
 from utils.eval import all_metrics
 from neptune.new.integrations.sacred import NeptuneObserver
@@ -67,15 +68,15 @@ def load_model(_log,
     if cui_embedding_path is not None:
         cui_embed_matrix = np.load(f"{cui_embedding_path}")
         cui_w2v_weights_from_np = torch.Tensor(cui_embed_matrix)
-        dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size,
-                                                                            CombinedDataset,
+        dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size, CombinedDataset,
                                                                             CombinedDataset.mimic_collate_fn,
+                                                                            DataReader,
                                                                             **dr_params)
     else:
-        dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size,
-                                                                            Dataset,
-                                                                            Dataset.mimic_collate_fn,
+        dr, train_data_loader, dev_data_loader, test_data_loader = get_data(batch_size, Dataset,
+                                                                            Dataset.mimic_collate_fn, DataReader,
                                                                             **dr_params)
+
     _log.info(f"Vocab size: {len(dr.featurizer.vocab)}\n"
               f"Embedding Dim: {embed_matrix.shape[1]}\n"
               f"Num Labels: {len(dr.mlb.classes_)}\n")
@@ -86,6 +87,7 @@ def load_model(_log,
               f"Test Partition ({len(test_data_loader.dataset)} samples):\n{dr.get_dataset_stats('test')}\n")
 
     if cui_embedding_path is not None:
+        _log.info(f"LAAT params for CombinedLAAT: {laat_params}")
         laat_params = {"n": len(dr.txt_featurizer.vocab),
                        "n_cui": len(dr.featurizer.vocab),
                        "de": embed_matrix.shape[1],
@@ -93,16 +95,19 @@ def load_model(_log,
                        "pre_trained_weights": w2v_weights_from_np,
                        "cui_pre_trained_weights": cui_w2v_weights_from_np,
                        **laat_params}
-
         model = CombinedLAAT(**laat_params)
 
     else:
+        # combined laat model has param "separate_encoder" and "post_LAAT_fusion"
+        # which are not supported by LAAT model
+        _, _, _ = laat_params.pop("separate_encoder", None), laat_params.pop("post_laat_fusion", None), \
+                  laat_params.pop("early_fusion", None)
+        _log.info(f"LAAT params for LAAT: {laat_params}")
         laat_params = {"n": len(dr.featurizer.vocab),
                        "de": embed_matrix.shape[1],
                        "L": len(dr.mlb.classes_),
                        "pre_trained_weights": w2v_weights_from_np,
                        **laat_params}
-
         model = LAAT(**laat_params)
 
     return model, train_data_loader, dev_data_loader, test_data_loader
@@ -153,6 +158,9 @@ def text_cfg():
                        da=256,
                        dropout=0.3,
                        pad_idx=0,
+                       separate_encoder=False,
+                       post_laat_fusion=True,
+                       early_fusion=False,
                        trainable=False)  # word embedding weights static
 
     # DataReader class params, first arg is batch_size
@@ -167,6 +175,11 @@ def text_cfg():
                          doc_iterator=MimicCuiSelectedTextIter,
                          umls_iterator=None)
     else:
+        if "early_fusion" in input_type:
+            doc_iterator = MimicDocWholeSentIter
+        else:
+            doc_iterator = None
+
         dr_params = dict(data_dir=f"{Path(data_dir) / 'mimic3'}",
                          version=version,
                          input_type=input_type,
@@ -174,7 +187,7 @@ def text_cfg():
                          cui_prune_file=None,
                          vocab_fn=f"processed_full_{input_type}_pruned.json",
                          max_seq_length=4000,
-                         doc_iterator=None,
+                         doc_iterator=doc_iterator,
                          umls_iterator=None)
 
 

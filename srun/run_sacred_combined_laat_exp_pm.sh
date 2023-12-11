@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # SLURM environment arguments
+export DGLBACKEND=pytorch
 MYDATA=/netscratch/pokarats/ds
-IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.02-py3_neptune2.sqsh
+IMAGE=/netscratch/pokarats/nvcr.io_nvidia_pytorch_22.03-py3_dglkgesource.sqsh
 NUM_CPUS=16
 MEM="$2"GB
 
@@ -63,7 +64,7 @@ do
           --mail-user=noon.pokaratsiri@dfki.de \
         srun/install_pretask.sh python src/laat_exp.py with data_dir="$MYDATA" input_type=combined version="$ver" \
         embedding_type=$embedding dr_params.prune_cui=True dr_params.vocab_fn=processed_full_umls_pruned.json \
-        dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle
+        dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle laat_params.separate_encoder=True
       fi
     else
       echo "$ver version u and da need to be 512"
@@ -115,7 +116,8 @@ do
           --mail-user=noon.pokaratsiri@dfki.de \
         srun/install_pretask.sh python src/laat_exp.py with data_dir="$MYDATA" input_type=combined version="$ver" \
         embedding_type=$embedding dr_params.prune_cui=True dr_params.vocab_fn=processed_full_umls_pruned.json \
-        dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle laat_params.u=512 laat_params.da=512
+        dr_params.cui_prune_file="$ver"_cuis_to_discard_"$embedding".pickle laat_params.u=512 laat_params.da=512 \
+        laat_params.separate_encoder=True
       fi
     fi
     sleep 3
