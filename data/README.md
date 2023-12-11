@@ -181,35 +181,6 @@ data
 ```
 
 ## Data Statistics
-
-### Text Input
-
-#### Top-50 Version
-
-| Partition |  Description   | Statistics |
-|-----------|:--------------:|-----------:|
-| Train     | Unique Tokens  |            |
-| Dev       | Unique Tokens  |            |
-|           |  only in Dev   |            |
-|           |   no unseen    |            |
-| Test      | Unique Tokens  |            |
-|           |  only in Test  |            |
-|           |   no unseen    |            |
-| Combined  | Unique Tokens  |            |
-
-#### Full Version
-
-| Partition |  Description   | Statistics |
-|-----------|:--------------:|-----------:|
-| Train     | Unique Tokens  |            |
-| Dev       | Unique Tokens  |            |
-|           |  only in Dev   |            |
-|           |   no unseen    |            |
-| Test      | Unique Tokens  |            |
-|           |  only in Test  |            |
-|           |   no unseen    |            |
-| Combined  | Unique Tokens  |            |
-
 ### UMLS CUIs Input
 
 Vocabulary size (number of unique tokens) per partition and combined before and after pruning:

@@ -30,4 +30,4 @@ Steps:
 ### File Description
 
 For information related to each file type, please refer to the 
-[UMLS Reference Manual] (https://www.ncbi.nlm.nih.gov/books/NBK9685/#ch03.sec3.3)
+[UMLS Reference Manual](https://www.ncbi.nlm.nih.gov/books/NBK9685/#ch03.sec3.3)
