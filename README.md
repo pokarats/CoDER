@@ -1,12 +1,7 @@
-# WIP: Graph Structures in Knowledge-Aware Multi-Label Classification for Healthcare Data
+# Towards Understanding Graph Structures in Medical Codes Classification
 This project contains code and documentation for all experiments related to thesis work on exploring graph structures
 in knowledge-aware ICD coding task on the MIMIC-III dataset. The task is set up as a multi-label classification
 problem.
-
-**WIP:DISCLAIMER:** 
-- While Work is in progress (WIP) not all information is up-to-date or accurate.
-- Ignore any instructions in here until further notice.
-- the only things being updated at the moment are the todo's/developer's notes
 
 ## Requirements
 
@@ -104,9 +99,9 @@ in the input
 has the 
 highest similarity score (among scores above a specified threshold, e.g. 0.7) to the CUIs in the input
 
-### Non Deep Learning (DL) Models
+### Machine Learning (ML) Models
 
-Using TFIDF for feature extraction, we experimented with the following Non-DL Models:
+Using TFIDF for feature extraction, we experimented with the following ML Models:
 
 - **Logistic Regression (LR)**
   - 1-gram
@@ -134,7 +129,7 @@ We implemented the [LAAT Model](https://arxiv.org/abs/2007.06351) following thei
 their publication.
 
 
-## Proposed Extensions
+## Extensions
 
 From the baseline results, the CUI input models are within a few percentage points in precision score (both the top-50
 and full versions). The F1 scores are also within 10-15 percentage points of the text-input models. Recall scores show
@@ -186,7 +181,7 @@ We experimented with the following set-ups with both the Top50 and Full Datasets
   - CUI and text embeddings are combined before their fused representation is input to the encoder
 
 
-### WIP:GNN
+### GNN
 
 From the results of the Combined and KGE models, the text-input LAAT model shows the highest P, R, and F1 scores.
 We hypothesized that the LSTM-based encoder in the baseline LAAT model favors sequential embeddings and input type.
@@ -229,20 +224,20 @@ regarding EHR structure and GCN performance, we proposed building a document gra
 - During graph construction, edges are connected if the conditional probability between the CUIs exceed a threshold
 - Edges are also drawn based on relations in the KG to reduce the number of disjointed subgraphs.
 
-## TODO's + Notes
+## Future Research Directions (Not completed)
 
 ### Explainability Extensions:
 1. GNNExplainer module integration with DGL 
 2. end-to-end demo of how GNNExplainer could facilitate useful explanation 
    1. Create visualizations that compare the different graph construction approaches
 
-### Optional
+### Other Ideas
 
-1. add CLEF file format capability for running baseline and future experiments for 
+1. Adding CLEF file format capability for running baseline and future experiments for 
    processing input text and label IDs
    1. possible to experiment with other datasets that have been clef-formatted
 2. accommodate multi-gpu runs
-3. Hierachical eval metrics, need ICD-9 Tree structure for HEMKIT
+3. Hierarchical evaluation metrics, need ICD-9 Tree structure for HEMKIT
 
 
 

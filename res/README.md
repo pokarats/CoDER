@@ -22,7 +22,7 @@
 **NOTE:** that for the Full Version, _the extension criteria (finding < 1 ICD label corresponding to input CUIs)_ were
 never met. Hence, identical results: i.e. No extensions were triggered.
 
-### Non-Deep-Learning Models
+### Machine Learning Models
 
 Overall, using 2-gram feature option improves performance across all models in both **Top-50** and **Full** versions. 
 Our best LR model with **UMLS CUIS** input type shows
